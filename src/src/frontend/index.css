@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    
+    /* RavenQuest theme - warm earth tones with rich amber accents */
+    --background: 0.98 0.01 60;
+    --foreground: 0.25 0.02 50;
+    --card: 0.99 0.005 60;
+    --card-foreground: 0.25 0.02 50;
+    --popover: 0.99 0.005 60;
+    --popover-foreground: 0.25 0.02 50;
+    
+    /* Primary: Rich amber for profit highlights */
+    --primary: 0.68 0.15 60;
+    --primary-foreground: 0.15 0.02 50;
+    
+    /* Secondary: Warm stone gray */
+    --secondary: 0.88 0.01 60;
+    --secondary-foreground: 0.25 0.02 50;
+    
+    /* Muted: Light stone */
+    --muted: 0.94 0.01 60;
+    --muted-foreground: 0.5 0.015 50;
+    
+    /* Accent: Deep forest green for nature/farming */
+    --accent: 0.55 0.09 150;
+    --accent-foreground: 0.98 0.01 60;
+    
+    /* Success: Profit green */
+    --success: 0.65 0.14 145;
+    --success-foreground: 0.98 0.01 60;
+    
+    /* Warning: Caution orange */
+    --warning: 0.72 0.16 50;
+    --warning-foreground: 0.15 0.02 50;
+    
+    /* Destructive: Loss red */
+    --destructive: 0.58 0.19 25;
+    --destructive-foreground: 0.98 0.01 60;
+    
+    --border: 0.88 0.01 60;
+    --input: 0.94 0.01 60;
+    --ring: 0.68 0.15 60;
+    
+    /* Chart colors: earthy game palette */
+    --chart-1: 0.68 0.15 60;
+    --chart-2: 0.55 0.09 150;
+    --chart-3: 0.72 0.16 50;
+    --chart-4: 0.48 0.08 280;
+    --chart-5: 0.65 0.12 320;
+    
+    --sidebar: 0.96 0.01 60;
+    --sidebar-foreground: 0.25 0.02 50;
+    --sidebar-primary: 0.68 0.15 60;
+    --sidebar-primary-foreground: 0.15 0.02 50;
+    --sidebar-accent: 0.92 0.01 60;
+    --sidebar-accent-foreground: 0.25 0.02 50;
+    --sidebar-border: 0.88 0.01 60;
+    --sidebar-ring: 0.68 0.15 60;
+  }
+
+  .dark {
+    /* Dark mode: deep night with warm highlights */
+    --background: 0.18 0.02 280;
+    --foreground: 0.92 0.01 60;
+    --card: 0.22 0.025 280;
+    --card-foreground: 0.92 0.01 60;
+    --popover: 0.20 0.025 280;
+    --popover-foreground: 0.92 0.01 60;
+    
+    /* Primary: Bright amber */
+    --primary: 0.75 0.17 55;
+    --primary-foreground: 0.15 0.02 50;
+    
+    /* Secondary: Dark stone */
+    --secondary: 0.28 0.02 280;
+    --secondary-foreground: 0.92 0.01 60;
+    
+    /* Muted: Medium dark */
+    --muted: 0.26 0.02 280;
+    --muted-foreground: 0.65 0.015 60;
+    
+    /* Accent: Vibrant forest green */
+    --accent: 0.62 0.12 155;
+    --accent-foreground: 0.98 0.01 60;
+    
+    /* Success: Bright profit green */
+    --success: 0.70 0.16 145;
+    --success-foreground: 0.15 0.02 50;
+    
+    /* Warning: Bright amber */
+    --warning: 0.75 0.17 55;
+    --warning-foreground: 0.15 0.02 50;
+    
+    /* Destructive: Bright loss red */
+    --destructive: 0.62 0.21 25;
+    --destructive-foreground: 0.98 0.01 60;
+    
+    --border: 0.30 0.025 280;
+    --input: 0.28 0.025 280;
+    --ring: 0.75 0.17 55;
+    
+    /* Chart colors: vibrant dark mode palette */
+    --chart-1: 0.75 0.17 55;
+    --chart-2: 0.62 0.12 155;
+    --chart-3: 0.78 0.18 45;
+    --chart-4: 0.58 0.12 280;
+    --chart-5: 0.68 0.14 320;
+    
+    --sidebar: 0.20 0.025 280;
+    --sidebar-foreground: 0.92 0.01 60;
+    --sidebar-primary: 0.75 0.17 55;
+    --sidebar-primary-foreground: 0.15 0.02 50;
+    --sidebar-accent: 0.26 0.02 280;
+    --sidebar-accent-foreground: 0.92 0.01 60;
+    --sidebar-border: 0.30 0.025 280;
+    --sidebar-ring: 0.75 0.17 55;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
