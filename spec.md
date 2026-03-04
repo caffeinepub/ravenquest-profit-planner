@@ -2,51 +2,40 @@
 
 ## Current State
 
-- Five calculator tabs: All Items, Farming, Herbalism, Woodcutting, Husbandry
-- CraftingCalculator.tsx exists but shows a "Coming Soon" placeholder
-- Price Book backed by localStorage (local mode) and optional guild mode via Internet Identity login
-- Guild shared prices require login (Internet Identity) to write; anonymous users can only read
-- Backend has `setPrice`/`clearPrice`/`clearAll` gated behind `#user` permission (requires login)
-- Crafting recipes fetched from Ravendawn API (`fetchAllCrafting`) for Alchemy, Blacksmithing, Carpentry, Cooking, Weaving
-- `CraftingRecipe` type defined with `materials` (array of `{itemId, amount, name}`) and output `itemId/name/amount`
-- Profit engine has `calculateGatheringProfit` and `calculateHusbandryProfit` but no crafting profit function
-- `useAllCrafting` hook exists in `useQueries.ts`
-- AllItemsCalculator only combines Farming/Herbalism/Woodcutting/Husbandry — no Crafting
+The app has Internet Identity login already wired up. The backend has an `AccessControl` module with admin/user roles. The `setPrice`, `clearPrice`, and `clearAll` backend functions are currently open to any caller (no auth check). The Price Book panel has a "Local" / "Guild (Shared)" toggle. Local mode uses localStorage only. Guild mode syncs to/from the backend shared price store.
 
 ## Requested Changes (Diff)
 
 ### Add
 
-- **Anonymous shared Price Book**: Remove login requirement from `setPrice`, `clearPrice`, `clearAll` in backend — any user (including guests) can update shared prices
-- **CraftingCalculator**: Full implementation replacing the placeholder, with:
-  - Load all recipes from API via `useAllCrafting`
-  - Per-recipe: show output item + quantity, all materials + quantities, total material cost (from price book), output value (from price book), profit, profit margin %, craft tax included
-  - Inline price editing for both output items AND materials (reuse price book store)
-  - Profession filter (Alchemy / Blacksmithing / Carpentry / Cooking / Weaving / All)
-  - Level filter, search, sort by profit/margin/level/name
-  - Show only positive profit toggle
-  - Confidence badge (High/Medium/Low)
-  - Recipe cost uses material prices × material amounts (summed); output value = output price × output amount; profit = output value − material cost − craft tax
-- **`calculateCraftingProfit`** function in `profitEngine.ts`
-- **Crafting tab** added to App.tsx navigation
-- **Crafting included in AllItemsCalculator** as a fifth category (with a distinct badge color)
+1. **Admin-only guard on backend price mutations** -- `setPrice`, `clearPrice`, and `clearAll` must only be callable by the app admin (the deployer/owner principal). Any non-admin call should trap with "Unauthorized: Admin only".
+
+2. **"Admin" visual indicator in the UI** -- When the logged-in principal is the admin, show a small gold "Admin" badge next to their principal ID in the header auth button area.
+
+3. **Lock Price Book editing behind admin login** -- In the Price Book panel and all inline price inputs:
+   - If the user is NOT logged in as admin: price inputs and edit controls are read-only (disabled). Show a tooltip/note: "Log in as admin to edit prices."
+   - If the user IS logged in as admin: editing works as normal.
+   - Local mode (localStorage) remains fully editable by anyone without login -- the restriction only applies to Guild (Shared) mode writes.
+
+4. **"Read-only" mode banner in Price Book panel** -- When guild mode is active and the user is not admin, show a subtle info banner: "Prices are managed by the guild admin. Log in to edit." with a Login button inline.
 
 ### Modify
 
-- **Backend `main.mo`**: Remove `#user` permission check from `setPrice`, `clearPrice`, `clearAll` so anonymous callers can write shared prices. Keep auth on `getMyClaims`, `setClaim`, `removeClaim`, user profile functions.
-- **`PriceBookPanel.tsx`**: Remove login-required notice for guild mode editing — all visitors can edit shared prices in guild mode
-- **`App.tsx`**: Add "Crafting" tab between Husbandry and Guild Planner
-- **Header subtitle**: Update to include "Crafting"
+- `main.mo`: Add `AccessControl.isAdmin` check to `setPrice`, `clearPrice`, and `clearAll`.
+- `PriceBookPanel` component: disable edit controls when in guild mode and not admin.
+- Inline price inputs in Crafting tab (`InlinePriceInput`, `MarketPriceInput`): when guild mode is active and user is not admin, render as read-only display values instead of editable inputs.
+- `AuthButton` in `App.tsx`: show "Admin" gold badge when logged in as admin.
 
 ### Remove
 
-- Login gate on price editing in guild mode (visible to all users)
+Nothing removed.
 
 ## Implementation Plan
 
-1. Update `src/backend/main.mo` — remove `#user` permission check from `setPrice`, `clearPrice`, `clearAll`
-2. Add `calculateCraftingProfit` to `src/frontend/src/lib/calculator/profitEngine.ts`
-3. Replace `src/frontend/src/pages/CraftingCalculator.tsx` with full implementation
-4. Update `src/frontend/src/pages/AllItemsCalculator.tsx` to include crafting items
-5. Update `src/frontend/src/App.tsx` to add Crafting tab
-6. Update `src/frontend/src/components/PriceBookPanel.tsx` to remove login gate on guild mode editing
+1. Update `main.mo`: add `if (not AccessControl.isAdmin(accessControlState, caller))` guard to `setPrice`, `clearPrice`, and `clearAll` with trap message "Unauthorized: Admin only".
+2. Regenerate backend types (backend.d.ts stays the same, no signature changes).
+3. Add `useIsAdmin` hook in frontend that checks if the logged-in identity's principal matches the admin principal fetched from the backend (use `isAdmin` query if available, or check against a known admin principal via `getAdminPrincipal` -- add this query to backend if needed).
+4. Update `PriceBookPanel`: import `useIsAdmin`, disable all edit/save/clear controls when `guildMode && !isAdmin`. Show read-only banner.
+5. Update `InlinePriceInput` and `MarketPriceInput` in CraftingCalculator: when guild mode is active and not admin, render a plain text display instead of an input.
+6. Update `AuthButton`: show gold "Admin" badge when `isAdmin` is true.
+7. Add a `getAdminPrincipal` query to the backend that returns the admin principal (so the frontend can check).

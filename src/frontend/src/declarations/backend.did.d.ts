@@ -35,6 +35,7 @@ export interface _SERVICE {
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'clearAll' : ActorMethod<[], undefined>,
   'clearPrice' : ActorMethod<[bigint], undefined>,
+  'getAdminPrincipal' : ActorMethod<[], [] | [Principal]>,
   'getAttributions' : ActorMethod<[], Array<[bigint, string]>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,

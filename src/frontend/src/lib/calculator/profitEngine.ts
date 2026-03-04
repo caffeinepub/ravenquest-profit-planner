@@ -22,6 +22,8 @@ export interface CraftingInputItem {
   totalCost: number;
 }
 
+export type CraftVerdict = "craft" | "sell_raw" | "even" | "unknown";
+
 export interface CraftingProfitResult {
   recipeId: number;
   recipeName: string;
@@ -40,6 +42,10 @@ export interface CraftingProfitResult {
   profitPerUnit: number;
   confidence: ConfidenceLevel;
   missingPrices: string[];
+  // Sell vs Craft comparison
+  sellRawValue: number; // sum of (mat.amount × mat.price × (1 - fee)) for all priced inputs
+  craftAdvantage: number; // craft profit - sellRaw profit (positive = craft is better)
+  verdict: CraftVerdict; // "unknown" if prices missing
 }
 
 export interface CalculationConfig {
@@ -188,6 +194,36 @@ export function calculateCraftingProfit(
     confidence = "low";
   }
 
+  // ── Sell vs Craft comparison ─────────────────────────────────────────────
+  // sellRawValue: what you'd earn by selling all materials directly on market
+  const allMaterialsPriced = inputs.every((i) => i.price !== null);
+  const sellRawValue = inputs.reduce((sum, i) => {
+    if (i.price === null) return sum;
+    return sum + i.amount * i.price * (1 - marketFeePercent / 100);
+  }, 0);
+
+  let verdict: CraftVerdict;
+  let craftAdvantage: number;
+
+  if (!allMaterialsPriced || outputPrice === null) {
+    verdict = "unknown";
+    craftAdvantage = 0;
+  } else {
+    // craft profit = outputValue - totalCost (totalCost includes craft tax)
+    const craftProfit = outputValue - totalCost;
+    // sellRaw profit = sellRawValue (materials cost 0 since you gathered them)
+    craftAdvantage = craftProfit - sellRawValue;
+
+    const NOISE_THRESHOLD = 10;
+    if (craftAdvantage > NOISE_THRESHOLD) {
+      verdict = "craft";
+    } else if (craftAdvantage < -NOISE_THRESHOLD) {
+      verdict = "sell_raw";
+    } else {
+      verdict = "even";
+    }
+  }
+
   return {
     recipeId: recipe.itemId,
     recipeName: recipe.name,
@@ -206,6 +242,9 @@ export function calculateCraftingProfit(
     profitPerUnit,
     confidence,
     missingPrices,
+    sellRawValue,
+    craftAdvantage,
+    verdict,
   };
 }
 

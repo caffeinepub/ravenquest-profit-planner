@@ -13,9 +13,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { useAllCrafting } from "@/hooks/useQueries";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useAllCrafting, useItemSourceMap } from "@/hooks/useQueries";
+import type { ItemSource } from "@/hooks/useQueries";
 import type { CraftingRecipe } from "@/lib/api/types";
 import {
+  type CraftVerdict,
   type CraftingProfitResult,
   calculateCraftingProfit,
 } from "@/lib/calculator/profitEngine";
@@ -27,29 +30,108 @@ import {
   AlertCircle,
   Award,
   BarChart3,
-  ChevronDown,
-  ChevronUp,
   Database,
-  Minus,
   RefreshCw,
   Search,
-  TrendingDown,
   TrendingUp,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type CraftingSortOption = "profit" | "margin" | "level" | "name";
+type CraftingSortOption =
+  | "profit"
+  | "margin"
+  | "level"
+  | "name"
+  | "craftAdvantage";
 
-const PROFESSION_COLORS: Record<string, string> = {
-  Alchemy: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-  Blacksmithing: "bg-slate-500/15 text-slate-300 border-slate-500/30",
-  Carpentry: "bg-yellow-700/15 text-yellow-600 border-yellow-700/30",
-  Cooking: "bg-rose-500/15 text-rose-400 border-rose-500/30",
-  Weaving: "bg-pink-500/15 text-pink-400 border-pink-500/30",
-  Unknown: "bg-muted/15 text-muted-foreground border-muted/30",
-};
+// ─── Profession Config ────────────────────────────────────────────────────────
+
+const PROFESSIONS = [
+  {
+    id: "Alchemy",
+    label: "Alchemy",
+    emoji: "⚗️",
+    color: "text-purple-400",
+    borderColor: "border-purple-500",
+    bgColor: "bg-purple-500/10",
+    pillColor:
+      "bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25",
+    activePillColor: "bg-purple-500/30 text-purple-200 border-purple-500/60",
+    sectionBg: "bg-purple-500/5",
+    headingColor: "text-purple-300",
+  },
+  {
+    id: "Blacksmithing",
+    label: "Blacksmithing",
+    emoji: "⚒️",
+    color: "text-slate-300",
+    borderColor: "border-slate-500",
+    bgColor: "bg-slate-500/10",
+    pillColor:
+      "bg-slate-500/15 text-slate-300 border-slate-500/40 hover:bg-slate-500/25",
+    activePillColor: "bg-slate-500/30 text-slate-200 border-slate-500/60",
+    sectionBg: "bg-slate-500/5",
+    headingColor: "text-slate-300",
+  },
+  {
+    id: "Cooking",
+    label: "Cooking",
+    emoji: "🍳",
+    color: "text-rose-400",
+    borderColor: "border-rose-500",
+    bgColor: "bg-rose-500/10",
+    pillColor:
+      "bg-rose-500/15 text-rose-300 border-rose-500/40 hover:bg-rose-500/25",
+    activePillColor: "bg-rose-500/30 text-rose-200 border-rose-500/60",
+    sectionBg: "bg-rose-500/5",
+    headingColor: "text-rose-300",
+  },
+  {
+    id: "Carpentry",
+    label: "Carpentry",
+    emoji: "🪵",
+    color: "text-yellow-500",
+    borderColor: "border-yellow-600",
+    bgColor: "bg-yellow-600/10",
+    pillColor:
+      "bg-yellow-600/15 text-yellow-400 border-yellow-600/40 hover:bg-yellow-600/25",
+    activePillColor: "bg-yellow-600/30 text-yellow-300 border-yellow-600/60",
+    sectionBg: "bg-yellow-600/5",
+    headingColor: "text-yellow-400",
+  },
+  {
+    id: "Weaving",
+    label: "Weaving",
+    emoji: "🧵",
+    color: "text-pink-400",
+    borderColor: "border-pink-500",
+    bgColor: "bg-pink-500/10",
+    pillColor:
+      "bg-pink-500/15 text-pink-300 border-pink-500/40 hover:bg-pink-500/25",
+    activePillColor: "bg-pink-500/30 text-pink-200 border-pink-500/60",
+    sectionBg: "bg-pink-500/5",
+    headingColor: "text-pink-300",
+  },
+] as const;
+
+function getProfessionConfig(professionId: string) {
+  return (
+    PROFESSIONS.find((p) => p.id === professionId) ?? {
+      id: "Unknown",
+      label: "Unknown",
+      emoji: "❓",
+      color: "text-muted-foreground",
+      borderColor: "border-border",
+      bgColor: "bg-muted/5",
+      pillColor: "bg-muted/15 text-muted-foreground border-border",
+      activePillColor: "bg-muted/25 text-foreground border-border",
+      sectionBg: "bg-muted/5",
+      headingColor: "text-muted-foreground",
+    }
+  );
+}
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
@@ -68,381 +150,750 @@ function formatLarge(num: number): string {
   return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
-// ─── Confidence Badge ─────────────────────────────────────────────────────────
+// ─── Silver Suffix ─────────────────────────────────────────────────────────────
 
-function ConfidencePip({ confidence }: { confidence: ConfidenceLevel }) {
-  const colors = {
-    high: "bg-profit text-profit-foreground",
-    medium: "bg-warning text-warning-foreground",
-    low: "bg-muted text-muted-foreground",
-  };
-  const labels = { high: "Full", medium: "Partial", low: "No Prices" };
+function S() {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
-        colors[confidence],
-      )}
-    >
-      {labels[confidence]}
-    </span>
+    <span className="ml-0.5 font-mono text-[10px] text-amber-400/70">s</span>
   );
 }
 
-// ─── Profession Badge ─────────────────────────────────────────────────────────
+// ─── Source Badge ─────────────────────────────────────────────────────────────
 
-function ProfessionBadge({ profession }: { profession: string }) {
-  const colorClass = PROFESSION_COLORS[profession] ?? PROFESSION_COLORS.Unknown;
+const SOURCE_CONFIG: Record<
+  ItemSource,
+  { label: string; emoji: string; className: string }
+> = {
+  farming: {
+    label: "Farm",
+    emoji: "🌾",
+    className: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
+  },
+  herbalism: {
+    label: "Herb",
+    emoji: "🌿",
+    className:
+      "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
+  },
+  woodcutting: {
+    label: "Wood",
+    emoji: "🪵",
+    className: "bg-yellow-600/15 text-yellow-400 border border-yellow-600/30",
+  },
+  husbandry: {
+    label: "Husb",
+    emoji: "🐄",
+    className: "bg-sky-500/15 text-sky-300 border border-sky-500/30",
+  },
+};
+
+function SourceBadge({ source }: { source: ItemSource }) {
+  const cfg = SOURCE_CONFIG[source];
   return (
-    <Badge
-      variant="outline"
-      className={`border px-1.5 py-0 text-[10px] font-medium ${colorClass}`}
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-[10px] font-medium leading-none shrink-0",
+        cfg.className,
+      )}
+      title={`Price pulled from ${source}`}
     >
-      {profession}
-    </Badge>
+      <span className="text-[9px]">{cfg.emoji}</span>
+      <span>{cfg.label}</span>
+    </span>
   );
 }
 
 // ─── Inline Price Input ───────────────────────────────────────────────────────
 
-function PriceInput({
+function InlinePriceInput({
   itemId,
   itemName,
-  index,
+  placeholder,
+  ocid,
+  readOnly,
 }: {
   itemId: number;
   itemName: string;
-  index: number;
+  placeholder?: string;
+  ocid?: string;
+  readOnly?: boolean;
 }) {
-  const { getPrice, setPrice } = usePriceBookStore();
-  const currentPrice = getPrice(itemId);
-  const [localValue, setLocalValue] = useState(
-    currentPrice !== null ? currentPrice.toString() : "",
+  const { getPrice, setPrice, hasPrice } = usePriceBookStore();
+  const storedPrice = getPrice(itemId);
+  const fromStore = hasPrice(itemId);
+
+  const [editing, setEditing] = useState(false);
+  const [localValue, setLocalValue] = useState("");
+
+  const displayValue = editing
+    ? localValue
+    : storedPrice !== null
+      ? storedPrice.toString()
+      : "";
+
+  const handleFocus = useCallback(() => {
+    if (readOnly) return;
+    setEditing(true);
+    setLocalValue(storedPrice !== null ? storedPrice.toString() : "");
+  }, [storedPrice, readOnly]);
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (readOnly) return;
+      setLocalValue(e.target.value);
+      const parsed = Number.parseFloat(e.target.value);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        setPrice(itemId, itemName, parsed);
+      }
+    },
+    [itemId, itemName, setPrice, readOnly],
   );
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(e.target.value);
-    const parsed = Number.parseFloat(e.target.value);
-    if (!Number.isNaN(parsed) && parsed >= 0) {
-      setPrice(itemId, itemName, parsed);
-    }
-  };
-
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
+    if (readOnly) return;
+    setEditing(false);
     const parsed = Number.parseFloat(localValue);
     if (!Number.isNaN(parsed) && parsed >= 0) {
       setPrice(itemId, itemName, parsed);
-    } else if (localValue === "") {
-      setLocalValue("");
     }
-  };
+  }, [itemId, itemName, localValue, setPrice, readOnly]);
+
+  if (readOnly) {
+    return (
+      <span className="font-mono text-xs tabular-nums text-muted-foreground w-24 text-right block">
+        {storedPrice !== null ? storedPrice.toLocaleString() : "—"}
+      </span>
+    );
+  }
 
   return (
-    <Input
-      data-ocid={`crafting.price_input.${index}`}
-      type="number"
-      min="0"
-      step="0.01"
-      placeholder="Set price..."
-      value={localValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      className="h-7 w-28 bg-surface-2 text-right font-mono text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-    />
+    <div className="relative inline-flex items-center">
+      {fromStore && storedPrice !== null && (
+        <span
+          className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-400 ring-1 ring-background"
+          title="Price synced from price book"
+        />
+      )}
+      <Input
+        data-ocid={ocid}
+        type="number"
+        min="0"
+        step="1"
+        placeholder={placeholder ?? "0"}
+        value={displayValue}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        className={cn(
+          "h-7 w-24 bg-surface-2/80 text-right font-mono text-xs tabular-nums",
+          "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+          "border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20",
+          fromStore && storedPrice !== null && "border-emerald-500/30",
+        )}
+      />
+    </div>
   );
 }
 
-// ─── Crafting Profit Row ──────────────────────────────────────────────────────
+// ─── Market Price Input (output item) ─────────────────────────────────────────
 
-function CraftingProfitRow({
+function MarketPriceInput({
   recipe,
   result,
   rowIndex,
+  readOnly,
 }: {
   recipe: CraftingRecipe;
   result: CraftingProfitResult;
   rowIndex: number;
+  readOnly?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const { marketFeePercent, craftTaxPercent } = useConfigStore();
+  const { getPrice, setPrice, hasPrice } = usePriceBookStore();
+  const { marketFeePercent } = useConfigStore();
+  const storedPrice = getPrice(recipe.itemId);
+  const fromStore = hasPrice(recipe.itemId);
 
-  const profitColor =
-    result.confidence === "low"
-      ? "text-muted-foreground"
-      : result.profit > 0
-        ? "text-profit"
-        : result.profit < 0
-          ? "text-loss"
-          : "text-muted-foreground";
+  const [editing, setEditing] = useState(false);
+  const [localValue, setLocalValue] = useState("");
+
+  const displayValue = editing
+    ? localValue
+    : storedPrice !== null
+      ? storedPrice.toString()
+      : "";
+
+  const handleFocus = useCallback(() => {
+    if (readOnly) return;
+    setEditing(true);
+    setLocalValue(storedPrice !== null ? storedPrice.toString() : "");
+  }, [storedPrice, readOnly]);
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (readOnly) return;
+      setLocalValue(e.target.value);
+      const parsed = Number.parseFloat(e.target.value);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        setPrice(recipe.itemId, recipe.name, parsed);
+      }
+    },
+    [recipe.itemId, recipe.name, setPrice, readOnly],
+  );
+
+  const handleBlur = useCallback(() => {
+    if (readOnly) return;
+    setEditing(false);
+    const parsed = Number.parseFloat(localValue);
+    if (!Number.isNaN(parsed) && parsed >= 0) {
+      setPrice(recipe.itemId, recipe.name, parsed);
+    }
+  }, [recipe.itemId, recipe.name, localValue, setPrice, readOnly]);
+
+  // Compute profit from current display value (stored or local)
+  const effectivePrice = editing
+    ? localValue
+    : storedPrice !== null
+      ? storedPrice.toString()
+      : "";
+  const unitPrice = Number.parseFloat(effectivePrice);
+  const hasValidPrice = !Number.isNaN(unitPrice) && unitPrice > 0;
+  const outputValue = hasValidPrice
+    ? recipe.amount * unitPrice * (1 - marketFeePercent / 100)
+    : null;
+  const profit =
+    outputValue !== null && result.confidence !== "low"
+      ? outputValue - result.totalCost
+      : null;
 
   return (
-    <div
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Market Unit Price
+        </span>
+        {fromStore && storedPrice !== null && (
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"
+            title="Synced from price book"
+          />
+        )}
+      </div>
+      <div className="flex items-center gap-1.5">
+        {readOnly ? (
+          <span className="font-mono text-xs tabular-nums text-muted-foreground w-28 text-right block">
+            {storedPrice !== null ? storedPrice.toLocaleString() : "—"}
+          </span>
+        ) : (
+          <div className="relative">
+            <Input
+              data-ocid={`crafting.item.${rowIndex}.input`}
+              type="number"
+              min="0"
+              step="1"
+              placeholder="0"
+              value={displayValue}
+              onChange={handleChange}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              className={cn(
+                "h-7 w-28 bg-surface-2 text-right font-mono text-xs tabular-nums",
+                "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+                "border-border/50 focus:border-cyan-500/50",
+                fromStore && storedPrice !== null && "border-emerald-500/30",
+              )}
+            />
+          </div>
+        )}
+        <S />
+      </div>
+      {profit !== null ? (
+        <div
+          className={cn(
+            "font-mono text-xs tabular-nums font-semibold",
+            profit > 0
+              ? "text-profit"
+              : profit < 0
+                ? "text-loss"
+                : "text-muted-foreground",
+          )}
+        >
+          {profit > 0 ? "+" : ""}
+          {formatSilver(profit)}
+          <S />{" "}
+          <span className="font-normal text-muted-foreground">
+            ({profit > 0 ? "+" : ""}
+            {outputValue && outputValue > 0
+              ? ((profit / outputValue) * 100).toFixed(1)
+              : "0.0"}
+            %)
+          </span>
+        </div>
+      ) : (
+        <div className="text-[10px] text-muted-foreground italic">
+          {result.confidence === "low" && !hasValidPrice
+            ? "Set material + output prices"
+            : "Enter price to view profit/loss"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sell vs Craft Comparison Block ──────────────────────────────────────────
+
+function SellVsCraftBlock({ result }: { result: CraftingProfitResult }) {
+  if (result.verdict === "unknown") return null;
+
+  const verdictConfig: Record<
+    Exclude<CraftVerdict, "unknown">,
+    { label: string; className: string; icon: string }
+  > = {
+    craft: {
+      label: "Crafting is more profitable",
+      className: "text-profit",
+      icon: "✅",
+    },
+    sell_raw: {
+      label: "Selling raw is more profitable",
+      className: "text-warning",
+      icon: "📦",
+    },
+    even: {
+      label: "Roughly break-even",
+      className: "text-muted-foreground",
+      icon: "⚖️",
+    },
+  };
+
+  const cfg = verdictConfig[result.verdict];
+  const diff = Math.abs(result.craftAdvantage);
+
+  return (
+    <div className="mt-2 rounded-lg bg-surface-2/60 border border-border/40 p-2 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+        <span>📊</span>
+        <span>Sell vs Craft</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="space-y-0.5">
+          <div className="text-[10px] text-muted-foreground">Sell raw</div>
+          <div className="font-mono tabular-nums font-semibold">
+            {formatSilver(result.sellRawValue)}
+            <span className="ml-0.5 font-mono text-[10px] text-amber-400/70">
+              s
+            </span>
+          </div>
+        </div>
+        <div className="space-y-0.5">
+          <div className="text-[10px] text-muted-foreground">
+            Craft &amp; sell
+          </div>
+          <div className="font-mono tabular-nums font-semibold">
+            {formatSilver(result.outputValue)}
+            <span className="ml-0.5 font-mono text-[10px] text-amber-400/70">
+              s
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        className={cn(
+          "text-xs font-medium flex items-center gap-1",
+          cfg.className,
+        )}
+      >
+        <span>{cfg.icon}</span>
+        <span>{cfg.label}</span>
+        {diff > 0 && (
+          <span className="font-mono tabular-nums">
+            {result.verdict === "craft" ? "+" : "-"}
+            {formatSilver(diff)}
+            <span className="ml-0.5 font-mono text-[9px] text-amber-400/70">
+              s
+            </span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Wiki-style Recipe Row ────────────────────────────────────────────────────
+
+function WikiRecipeRow({
+  recipe,
+  result,
+  rowIndex,
+  itemSourceMap,
+  readOnly,
+}: {
+  recipe: CraftingRecipe;
+  result: CraftingProfitResult;
+  rowIndex: number;
+  itemSourceMap: Map<number, ItemSource>;
+  readOnly?: boolean;
+}) {
+  const { craftTaxPercent } = useConfigStore();
+
+  // Recompute tax display value from inputs
+  const totalInputCost = result.inputs.reduce((sum, i) => sum + i.totalCost, 0);
+  const taxAmount = Math.round(totalInputCost * (craftTaxPercent / 100));
+  const totalCost = totalInputCost + taxAmount;
+  const perUnit = recipe.amount > 0 ? totalCost / recipe.amount : 0;
+
+  const silverPerXp =
+    recipe.experience > 0 && totalCost > 0
+      ? totalCost / recipe.experience
+      : null;
+
+  const hasMaterialPrices = result.inputs.every((i) => i.price !== null);
+
+  return (
+    <tr
       data-ocid={`crafting.item.${rowIndex}`}
-      className="rounded-lg border border-border bg-surface-1 transition-colors hover:border-border/80 hover:bg-surface-2/60"
+      className="group border-b border-border/40 hover:bg-surface-2/30 transition-colors"
     >
-      {/* ── Header Row ── */}
+      {/* ── Item Column ── */}
+      <td className="py-3 pl-4 pr-3 align-top">
+        <div className="space-y-0.5">
+          <div className="inline-flex items-center rounded-sm bg-surface-3/60 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            Level {recipe.level}
+          </div>
+          <div className="font-semibold text-sm leading-snug">
+            {recipe.name}
+          </div>
+          {recipe.amount > 1 && (
+            <div className="text-xs text-muted-foreground">
+              × {recipe.amount}
+            </div>
+          )}
+        </div>
+      </td>
+
+      {/* ── Materials Column ── */}
+      <td className="py-3 px-3 align-top">
+        <div className="space-y-1 min-w-[260px]">
+          {result.inputs.map((inp) => {
+            const source = itemSourceMap.get(inp.itemId);
+            return (
+              <div key={inp.itemId} className="flex items-center gap-2">
+                <span className="font-mono text-xs tabular-nums text-muted-foreground w-5 text-right shrink-0">
+                  {inp.amount}
+                </span>
+                <span className="text-muted-foreground text-xs shrink-0">
+                  ×
+                </span>
+                <span
+                  className="text-xs flex-1 min-w-0 truncate"
+                  title={inp.itemName}
+                >
+                  {inp.itemName}
+                </span>
+                {source && <SourceBadge source={source} />}
+                <InlinePriceInput
+                  itemId={inp.itemId}
+                  itemName={inp.itemName}
+                  placeholder="0"
+                  ocid={`crafting.item.${rowIndex}.input`}
+                  readOnly={readOnly}
+                />
+                <S />
+              </div>
+            );
+          })}
+
+          {/* Tax row */}
+          {craftTaxPercent > 0 && (
+            <div className="flex items-center gap-2 border-t border-border/30 pt-1 mt-1">
+              <span className="w-5 shrink-0" />
+              <span className="w-3 shrink-0" />
+              <span className="text-xs text-muted-foreground flex-1">Tax</span>
+              <span className="font-mono text-xs tabular-nums text-loss w-24 text-right">
+                {hasMaterialPrices ? formatSilver(taxAmount) : "—"}
+              </span>
+              <S />
+            </div>
+          )}
+
+          {/* Total Cost */}
+          <div className="flex items-center gap-2 border-t border-border/30 pt-1">
+            <span className="w-5 shrink-0" />
+            <span className="w-3 shrink-0" />
+            <span className="text-xs font-medium flex-1">Total Cost</span>
+            <span className="font-mono text-xs tabular-nums font-semibold w-24 text-right">
+              {hasMaterialPrices ? formatSilver(totalCost) : "—"}
+            </span>
+            <S />
+          </div>
+          {hasMaterialPrices && perUnit > 0 && (
+            <div className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
+              <span className="font-mono tabular-nums">
+                {formatSilver(perUnit)}
+              </span>
+              <S />
+              <span>/unit</span>
+            </div>
+          )}
+
+          {/* Sell vs Craft comparison */}
+          <SellVsCraftBlock result={result} />
+        </div>
+      </td>
+
+      {/* ── Craft Cost / Market Price Column ── */}
+      <td className="py-3 px-3 align-top min-w-[160px]">
+        <MarketPriceInput
+          recipe={recipe}
+          result={result}
+          rowIndex={rowIndex}
+          readOnly={readOnly}
+        />
+      </td>
+
+      {/* ── Exp Column ── */}
+      <td className="py-3 px-3 align-top text-right">
+        <div className="space-y-1">
+          <div className="font-mono text-xs tabular-nums">
+            <span className="text-foreground">
+              {recipe.experience.toLocaleString()}
+            </span>
+            <span className="text-muted-foreground">xp</span>
+          </div>
+          {silverPerXp !== null && (
+            <div className="flex items-center justify-end gap-0.5 text-[11px] text-muted-foreground">
+              <span className="font-mono tabular-nums">
+                {silverPerXp.toFixed(2)}
+              </span>
+              <S />
+              <span>/xp</span>
+            </div>
+          )}
+        </div>
+      </td>
+
+      {/* ── Progress Column ── */}
+      <td className="py-3 px-3 align-top text-right">
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {recipe.progress ?? "—"}
+        </span>
+      </td>
+
+      {/* ── Quality Column ── */}
+      <td className="py-3 px-3 align-top text-right">
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {recipe.quality ?? "—"}
+        </span>
+      </td>
+
+      {/* ── Durability Column ── */}
+      <td className="py-3 pr-4 pl-3 align-top text-right">
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {recipe.durability ?? "—"}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+// ─── Category Table ───────────────────────────────────────────────────────────
+
+function CategoryTable({
+  categoryName,
+  recipes,
+  results,
+  rowOffset,
+  itemSourceMap,
+  readOnly,
+}: {
+  categoryName: string;
+  recipes: CraftingRecipe[];
+  results: Map<number, CraftingProfitResult>;
+  rowOffset: number;
+  itemSourceMap: Map<number, ItemSource>;
+  readOnly?: boolean;
+}) {
+  return (
+    <div className="mb-4">
+      {/* Sub-section heading */}
+      <h3 className="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {categoryName}
+      </h3>
+      <div className="overflow-x-auto rounded-lg border border-border/60 bg-surface-1">
+        <table className="w-full min-w-[700px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border/60 bg-surface-2/60">
+              <th className="py-2 pl-4 pr-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-[160px]">
+                Item
+              </th>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Materials
+              </th>
+              <th className="py-2 px-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-[180px]">
+                Craft Cost
+              </th>
+              <th className="py-2 px-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-[90px]">
+                Exp
+              </th>
+              <th className="py-2 px-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-[80px]">
+                Progress
+              </th>
+              <th className="py-2 px-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-[80px]">
+                Quality
+              </th>
+              <th className="py-2 pr-4 pl-3 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-[90px]">
+                Durability
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {recipes.map((recipe, i) => {
+              const result = results.get(recipe.itemId);
+              if (!result) return null;
+              return (
+                <WikiRecipeRow
+                  key={recipe.itemId}
+                  recipe={recipe}
+                  result={result}
+                  rowIndex={rowOffset + i + 1}
+                  itemSourceMap={itemSourceMap}
+                  readOnly={readOnly}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Profession Section ───────────────────────────────────────────────────────
+
+function ProfessionSection({
+  professionId,
+  recipes,
+  results,
+  rowOffset,
+  itemSourceMap,
+  readOnly,
+}: {
+  professionId: string;
+  recipes: CraftingRecipe[];
+  results: Map<number, CraftingProfitResult>;
+  rowOffset: number;
+  itemSourceMap: Map<number, ItemSource>;
+  readOnly?: boolean;
+}) {
+  const profConfig = getProfessionConfig(professionId);
+
+  // Group by category
+  const categories = useMemo(() => {
+    const map = new Map<string, CraftingRecipe[]>();
+    for (const r of recipes) {
+      const cat = r.category || "General";
+      const fullCat = `${professionId} - ${cat}`;
+      const arr = map.get(fullCat) ?? [];
+      arr.push(r);
+      map.set(fullCat, arr);
+    }
+    return map;
+  }, [recipes, professionId]);
+
+  let localOffset = rowOffset;
+
+  return (
+    <section id={`profession-${professionId.toLowerCase()}`} className="mb-8">
+      {/* Profession heading */}
+      <div
+        className={cn(
+          "mb-4 flex items-center gap-2.5 border-l-[3px] pl-3 py-1",
+          profConfig.borderColor,
+        )}
+      >
+        <span className="text-xl leading-none">{profConfig.emoji}</span>
+        <h2 className={cn("text-lg font-bold", profConfig.headingColor)}>
+          {profConfig.label}
+        </h2>
+        <Badge
+          variant="outline"
+          className={cn(
+            "ml-auto border px-2 py-0 text-xs",
+            profConfig.pillColor,
+          )}
+        >
+          {recipes.length} recipes
+        </Badge>
+      </div>
+
+      {/* Categories */}
+      {Array.from(categories.entries()).map(([catName, catRecipes]) => {
+        const offset = localOffset;
+        localOffset += catRecipes.length;
+        return (
+          <CategoryTable
+            key={catName}
+            categoryName={catName}
+            recipes={catRecipes}
+            results={results}
+            rowOffset={offset}
+            itemSourceMap={itemSourceMap}
+            readOnly={readOnly}
+          />
+        );
+      })}
+    </section>
+  );
+}
+
+// ─── Profession Nav Pills ─────────────────────────────────────────────────────
+
+function ProfessionNavPills({
+  availableProfessions,
+  activeProfession,
+}: {
+  availableProfessions: string[];
+  activeProfession: string;
+}) {
+  const handleScrollTo = (profId: string) => {
+    const el = document.getElementById(`profession-${profId.toLowerCase()}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-6">
       <button
         type="button"
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
-        onClick={() => setExpanded((e) => !e)}
-        aria-expanded={expanded}
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+          activeProfession === "all"
+            ? "bg-foreground/10 text-foreground border-foreground/30"
+            : "bg-surface-2/50 text-muted-foreground border-border hover:bg-surface-2 hover:text-foreground",
+        )}
+        data-ocid="crafting.tab"
       >
-        {/* Chevron */}
-        <span className="shrink-0 text-muted-foreground">
-          {expanded ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </span>
-
-        {/* Name + meta */}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{recipe.name}</span>
-            <ProfessionBadge profession={result.profession} />
-            <Badge
-              variant="outline"
-              className="border-border/50 px-1.5 py-0 text-[10px] text-muted-foreground"
-            >
-              Lvl {recipe.level}
-            </Badge>
-            {result.outputQty > 1 && (
-              <span className="text-xs text-muted-foreground">
-                → {result.outputQty}×
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {recipe.materials.map((m) => `${m.amount}× ${m.name}`).join(" + ")}
-          </div>
-        </div>
-
-        {/* Profit */}
-        <div className="shrink-0 text-right">
-          <div
+        🗂️ All
+      </button>
+      {PROFESSIONS.filter((p) => availableProfessions.includes(p.id)).map(
+        (p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => handleScrollTo(p.id)}
+            data-ocid={`crafting.${p.id.toLowerCase()}.tab`}
             className={cn(
-              "font-num text-sm font-bold tabular-nums",
-              profitColor,
+              "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              activeProfession === p.id ? p.activePillColor : p.pillColor,
             )}
           >
-            {result.confidence === "low" ? (
-              <Minus className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <>
-                {result.profit > 0 ? (
-                  <TrendingUp className="inline mr-1 h-3.5 w-3.5" />
-                ) : result.profit < 0 ? (
-                  <TrendingDown className="inline mr-1 h-3.5 w-3.5" />
-                ) : null}
-                {result.profit > 0 ? "+" : ""}
-                {formatSilver(result.profit)}s
-              </>
-            )}
-          </div>
-          {result.confidence !== "low" && (
-            <div className="font-num text-xs text-muted-foreground">
-              {result.profitMargin.toFixed(1)}% margin
-            </div>
-          )}
-        </div>
-
-        <div className="shrink-0">
-          <ConfidencePip confidence={result.confidence} />
-        </div>
-      </button>
-
-      {/* ── Expanded Panel ── */}
-      {expanded && (
-        <div className="border-t border-border/50 bg-surface-2/40 px-4 py-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Input materials */}
-            <div>
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Input Materials — Set Prices
-              </h4>
-              <div className="space-y-2">
-                {result.inputs.map((inp, i) => (
-                  <div
-                    key={inp.itemId}
-                    className="flex items-center justify-between gap-2 rounded-md bg-surface-1 px-3 py-2"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{inp.itemName}</div>
-                      <div className="font-num text-xs text-muted-foreground">
-                        Qty: {inp.amount}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <PriceInput
-                        itemId={inp.itemId}
-                        itemName={inp.itemName}
-                        index={rowIndex * 100 + i + 1}
-                      />
-                      <span className="font-num text-xs text-muted-foreground">
-                        ea
-                      </span>
-                      <span
-                        className={cn(
-                          "font-num w-20 text-right text-xs",
-                          inp.price !== null
-                            ? "text-foreground"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {inp.price !== null
-                          ? `= ${formatSilver(inp.totalCost)}s`
-                          : "—"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Output item price */}
-                <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-cyan-300">
-                      {recipe.name}
-                    </div>
-                    <div className="font-num text-xs text-muted-foreground">
-                      Output: {result.outputQty}×
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <PriceInput
-                      itemId={recipe.itemId}
-                      itemName={recipe.name}
-                      index={rowIndex * 100 + recipe.materials.length + 1}
-                    />
-                    <span className="font-num text-xs text-muted-foreground">
-                      ea
-                    </span>
-                    <span
-                      className={cn(
-                        "font-num w-20 text-right text-xs",
-                        result.outputPrice !== null
-                          ? "text-cyan-300"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {result.outputPrice !== null
-                        ? `= ${formatSilver(result.outputValue)}s`
-                        : "—"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Profit breakdown */}
-            <div>
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Profit Breakdown
-              </h4>
-              <div className="rounded-md bg-surface-1 px-3 py-3">
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Total Input Cost
-                    </span>
-                    <span className="font-num">
-                      {result.confidence === "low"
-                        ? "—"
-                        : `${formatSilver(result.totalInputCost)}s`}
-                    </span>
-                  </div>
-                  {craftTaxPercent > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        Craft Tax ({craftTaxPercent}%)
-                      </span>
-                      <span className="font-num text-loss">
-                        {result.confidence === "low"
-                          ? "—"
-                          : `−${formatSilver(result.craftTax)}s`}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Cost</span>
-                    <span className="font-num">
-                      {result.confidence === "low"
-                        ? "—"
-                        : `${formatSilver(result.totalCost)}s`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Output Value (after {marketFeePercent}% fee)
-                    </span>
-                    <span className="font-num text-cyan-300">
-                      {result.confidence === "low"
-                        ? "—"
-                        : `${formatSilver(result.outputValue)}s`}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-border/50 pt-2 font-semibold">
-                    <span>Net Profit</span>
-                    <span
-                      className={cn(
-                        "font-num",
-                        result.confidence === "low"
-                          ? "text-muted-foreground"
-                          : result.profit > 0
-                            ? "text-profit"
-                            : result.profit < 0
-                              ? "text-loss"
-                              : "text-muted-foreground",
-                      )}
-                    >
-                      {result.confidence === "low"
-                        ? "—"
-                        : `${result.profit > 0 ? "+" : ""}${formatSilver(result.profit)}s`}
-                    </span>
-                  </div>
-                  {result.confidence !== "low" && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Margin</span>
-                      <span className="font-num">
-                        {result.profitMargin.toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-                  {result.outputQty > 1 && result.confidence !== "low" && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Per Unit</span>
-                      <span
-                        className={cn(
-                          "font-num",
-                          result.profitPerUnit > 0
-                            ? "text-profit"
-                            : result.profitPerUnit < 0
-                              ? "text-loss"
-                              : "text-muted-foreground",
-                        )}
-                      >
-                        {result.profitPerUnit > 0 ? "+" : ""}
-                        {formatSilver(result.profitPerUnit)}s
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>XP per Craft</span>
-                    <span className="font-num">
-                      {recipe.experience.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                {result.missingPrices.length > 0 && (
-                  <div className="mt-3 rounded bg-warning/10 px-2 py-1.5 text-xs text-warning">
-                    Missing prices: {result.missingPrices.join(", ")}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+            <span>{p.emoji}</span>
+            <span>{p.label}</span>
+          </button>
+        ),
       )}
     </div>
   );
@@ -450,34 +901,33 @@ function CraftingProfitRow({
 
 // ─── Crafting Filters ─────────────────────────────────────────────────────────
 
-interface CraftingFiltersProps {
-  searchTerm: string;
-  onSearchChange: (v: string) => void;
-  professionFilter: string;
-  onProfessionFilterChange: (v: string) => void;
-  minLevel: number;
-  maxLevel: number;
-  onLevelRangeChange: (min: number, max: number) => void;
-  sortBy: CraftingSortOption;
-  onSortChange: (v: CraftingSortOption) => void;
-  showOnlyPositive: boolean;
-  onShowOnlyPositiveChange: (v: boolean) => void;
-  topN: number;
-  onTopNChange: (v: number) => void;
-}
-
 function CraftingFilters({
   searchTerm,
   onSearchChange,
   professionFilter,
   onProfessionFilterChange,
+  maxLevel,
+  onMaxLevelChange,
   sortBy,
   onSortChange,
   showOnlyPositive,
   onShowOnlyPositiveChange,
   topN,
   onTopNChange,
-}: CraftingFiltersProps) {
+}: {
+  searchTerm: string;
+  onSearchChange: (v: string) => void;
+  professionFilter: string;
+  onProfessionFilterChange: (v: string) => void;
+  maxLevel: number;
+  onMaxLevelChange: (v: number) => void;
+  sortBy: CraftingSortOption;
+  onSortChange: (v: CraftingSortOption) => void;
+  showOnlyPositive: boolean;
+  onShowOnlyPositiveChange: (v: boolean) => void;
+  topN: number;
+  onTopNChange: (v: number) => void;
+}) {
   return (
     <div className="space-y-5">
       {/* Search */}
@@ -498,6 +948,26 @@ function CraftingFilters({
         </div>
       </div>
 
+      {/* Max Level */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Max Level
+        </Label>
+        <Input
+          data-ocid="crafting.filters.maxlevel_input"
+          type="number"
+          min="1"
+          max="100"
+          placeholder="100"
+          value={maxLevel >= 100 ? "" : maxLevel.toString()}
+          onChange={(e) => {
+            const v = Number.parseInt(e.target.value);
+            onMaxLevelChange(Number.isNaN(v) ? 100 : Math.max(1, v));
+          }}
+          className="bg-surface-2 text-sm"
+        />
+      </div>
+
       {/* Profession filter */}
       <div className="space-y-1.5">
         <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -515,11 +985,11 @@ function CraftingFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Professions</SelectItem>
-            <SelectItem value="Alchemy">Alchemy</SelectItem>
-            <SelectItem value="Blacksmithing">Blacksmithing</SelectItem>
-            <SelectItem value="Carpentry">Carpentry</SelectItem>
-            <SelectItem value="Cooking">Cooking</SelectItem>
-            <SelectItem value="Weaving">Weaving</SelectItem>
+            {PROFESSIONS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.emoji} {p.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -540,9 +1010,12 @@ function CraftingFilters({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="level">Level (asc)</SelectItem>
             <SelectItem value="profit">Profit</SelectItem>
             <SelectItem value="margin">Margin %</SelectItem>
-            <SelectItem value="level">Level</SelectItem>
+            <SelectItem value="craftAdvantage">
+              Craft Advantage (best to craft)
+            </SelectItem>
             <SelectItem value="name">Name (A–Z)</SelectItem>
           </SelectContent>
         </Select>
@@ -577,9 +1050,9 @@ function CraftingFilters({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="25">25 results</SelectItem>
-            <SelectItem value="50">50 results</SelectItem>
-            <SelectItem value="100">100 results</SelectItem>
+            <SelectItem value="25">25 per section</SelectItem>
+            <SelectItem value="50">50 per section</SelectItem>
+            <SelectItem value="100">100 per section</SelectItem>
             <SelectItem value="9999">All results</SelectItem>
           </SelectContent>
         </Select>
@@ -612,11 +1085,22 @@ function CraftingSummaryPanel({
         pricedResults.length
       : null;
 
-  const pricedCount = pricedResults.length;
+  // Sell vs Craft stats
+  const craftBetterCount = results.filter((r) => r.verdict === "craft").length;
+  const sellRawBetterCount = results.filter(
+    (r) => r.verdict === "sell_raw",
+  ).length;
+  const bestCraftAdvantage =
+    results.filter((r) => r.verdict === "craft").length > 0
+      ? results
+          .filter((r) => r.verdict === "craft")
+          .reduce((best, r) =>
+            r.craftAdvantage > best.craftAdvantage ? r : best,
+          )
+      : null;
 
   return (
     <div className="space-y-5">
-      {/* Prices set */}
       <div className="flex items-start gap-2">
         <Database className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
@@ -624,7 +1108,7 @@ function CraftingSummaryPanel({
             Priced Recipes
           </div>
           <div className="font-num mt-0.5 text-xl font-bold">
-            {pricedCount}
+            {pricedResults.length}
             <span className="text-sm font-normal text-muted-foreground">
               {" "}
               / {totalItems}
@@ -635,7 +1119,6 @@ function CraftingSummaryPanel({
 
       <Separator />
 
-      {/* Total profit */}
       <div className="flex items-start gap-2">
         <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
@@ -657,7 +1140,6 @@ function CraftingSummaryPanel({
 
       <Separator />
 
-      {/* Best craft */}
       {bestItem && bestItem.profit > 0 && (
         <>
           <div className="flex items-start gap-2">
@@ -680,12 +1162,10 @@ function CraftingSummaryPanel({
               </div>
             </div>
           </div>
-
           <Separator />
         </>
       )}
 
-      {/* Avg margin */}
       <div className="flex items-start gap-2">
         <BarChart3 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
@@ -706,6 +1186,52 @@ function CraftingSummaryPanel({
           </div>
         </div>
       </div>
+
+      <Separator />
+
+      {/* Sell vs Craft summary */}
+      <div className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Sell vs Craft
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-profit/10 border border-profit/20 p-2 text-center">
+            <div className="font-num text-xl font-bold text-profit">
+              {craftBetterCount}
+            </div>
+            <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+              better to craft
+            </div>
+          </div>
+          <div className="rounded-lg bg-warning/10 border border-warning/20 p-2 text-center">
+            <div className="font-num text-xl font-bold text-warning">
+              {sellRawBetterCount}
+            </div>
+            <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+              sell raw instead
+            </div>
+          </div>
+        </div>
+
+        {bestCraftAdvantage && (
+          <div className="rounded-lg bg-surface-2 p-2.5 space-y-0.5">
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Best Craft Advantage
+            </div>
+            <div
+              className="text-xs font-medium truncate"
+              title={bestCraftAdvantage.recipeName}
+            >
+              {bestCraftAdvantage.recipeName}
+            </div>
+            <div className="font-num text-sm font-bold text-profit">
+              +{formatLarge(bestCraftAdvantage.craftAdvantage)}s vs selling raw
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Separator />
 
       {/* Confidence breakdown */}
       <div className="rounded-lg bg-surface-2 p-3">
@@ -744,6 +1270,16 @@ function CraftingSummaryPanel({
           })}
         </div>
       </div>
+
+      {/* Price sync tip */}
+      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+          <span className="font-medium text-emerald-300">Price Sync</span>
+        </div>
+        Prices set in Farming, Herbalism, or other tabs automatically appear in
+        crafting material inputs.
+      </div>
     </div>
   );
 }
@@ -753,15 +1289,17 @@ function CraftingSummaryPanel({
 export function CraftingCalculator() {
   const { data: recipes, isLoading, error, refetch } = useAllCrafting();
   const config = useConfigStore();
-  const { getPrice } = usePriceBookStore();
+  const { getPrice, guildMode } = usePriceBookStore();
+  const { isAdmin } = useIsAdmin();
+  const isReadOnly = guildMode && !isAdmin;
+  const itemSourceMap = useItemSourceMap();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [professionFilter, setProfessionFilter] = useState("all");
-  const [minLevel, setMinLevel] = useState(1);
   const [maxLevel, setMaxLevel] = useState(100);
-  const [sortBy, setSortBy] = useState<CraftingSortOption>("profit");
+  const [sortBy, setSortBy] = useState<CraftingSortOption>("level");
   const [showOnlyPositive, setShowOnlyPositive] = useState(false);
-  const [topN, setTopN] = useState(50);
+  const [topN, setTopN] = useState(9999);
 
   // Compute all results
   const allResults = useMemo(() => {
@@ -775,77 +1313,116 @@ export function CraftingCalculator() {
     );
   }, [recipes, config.marketFeePercent, config.craftTaxPercent, getPrice]);
 
-  // Summary results (unfiltered)
-  const summaryResults = allResults;
+  // Build result map for quick lookup
+  const resultMap = useMemo(() => {
+    const map = new Map<number, CraftingProfitResult>();
+    for (const r of allResults) map.set(r.recipeId, r);
+    return map;
+  }, [allResults]);
 
-  // Filtered + sorted results
-  const filteredResults = useMemo(() => {
-    let filtered = allResults.filter((r, i) => {
-      const recipe = recipes?.[i];
-      if (!recipe) return false;
+  // Available professions
+  const availableProfessions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of recipes ?? []) set.add(r.profession ?? "Unknown");
+    return Array.from(set);
+  }, [recipes]);
 
+  // Filtered recipes grouped by profession → category
+  const filteredAndGrouped = useMemo(() => {
+    if (!recipes) return new Map<string, CraftingRecipe[]>();
+
+    const filtered = recipes.filter((recipe) => {
       if (
         searchTerm &&
-        !r.recipeName.toLowerCase().includes(searchTerm.toLowerCase())
+        !recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
         return false;
-
-      if (professionFilter !== "all" && r.profession !== professionFilter)
+      if (
+        professionFilter !== "all" &&
+        (recipe.profession ?? "Unknown") !== professionFilter
+      )
         return false;
-
-      if (recipe.level < minLevel || recipe.level > maxLevel) return false;
-      if (showOnlyPositive && r.profit <= 0) return false;
-
+      if (recipe.level > maxLevel) return false;
+      if (showOnlyPositive) {
+        const result = resultMap.get(recipe.itemId);
+        if (!result || result.profit <= 0) return false;
+      }
       return true;
     });
 
+    // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case "profit":
-          return b.profit - a.profit;
-        case "margin":
-          return b.profitMargin - a.profitMargin;
-        case "level": {
-          const recipeA = recipes?.find((r) => r.itemId === a.recipeId);
-          const recipeB = recipes?.find((r) => r.itemId === b.recipeId);
-          return (recipeA?.level ?? 0) - (recipeB?.level ?? 0);
+        case "profit": {
+          const ra = resultMap.get(a.itemId);
+          const rb = resultMap.get(b.itemId);
+          return (rb?.profit ?? 0) - (ra?.profit ?? 0);
         }
+        case "margin": {
+          const ra = resultMap.get(a.itemId);
+          const rb = resultMap.get(b.itemId);
+          return (rb?.profitMargin ?? 0) - (ra?.profitMargin ?? 0);
+        }
+        case "craftAdvantage": {
+          const ra = resultMap.get(a.itemId);
+          const rb = resultMap.get(b.itemId);
+          // "craft" verdict items come first, then by craftAdvantage descending
+          const verdictOrder = (v: string | undefined) =>
+            v === "craft" ? 0 : v === "even" ? 1 : v === "sell_raw" ? 2 : 3;
+          const vA = verdictOrder(ra?.verdict);
+          const vB = verdictOrder(rb?.verdict);
+          if (vA !== vB) return vA - vB;
+          return (rb?.craftAdvantage ?? 0) - (ra?.craftAdvantage ?? 0);
+        }
+        case "level":
+          return a.level - b.level;
         case "name":
-          return a.recipeName.localeCompare(b.recipeName);
+          return a.name.localeCompare(b.name);
         default:
           return 0;
       }
     });
 
-    if (topN < 9999) filtered = filtered.slice(0, topN);
-    return filtered;
+    // Group by profession
+    const grouped = new Map<string, CraftingRecipe[]>();
+    for (const recipe of filtered) {
+      const prof = recipe.profession ?? "Unknown";
+      const arr = grouped.get(prof) ?? [];
+      arr.push(recipe);
+      grouped.set(prof, arr);
+    }
+
+    // Apply topN per profession/section
+    if (topN < 9999) {
+      for (const [prof, arr] of grouped) {
+        grouped.set(prof, arr.slice(0, topN));
+      }
+    }
+
+    return grouped;
   }, [
-    allResults,
     recipes,
     searchTerm,
     professionFilter,
-    minLevel,
     maxLevel,
     showOnlyPositive,
     sortBy,
     topN,
+    resultMap,
   ]);
 
-  // Build recipe map for quick lookup
-  const recipeMap = useMemo(() => {
-    const map = new Map<number, CraftingRecipe>();
-    for (const r of recipes ?? []) {
-      map.set(r.itemId, r);
-    }
-    return map;
-  }, [recipes]);
+  const totalFiltered = useMemo(() => {
+    let count = 0;
+    for (const arr of filteredAndGrouped.values()) count += arr.length;
+    return count;
+  }, [filteredAndGrouped]);
 
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-6">
         <div className="space-y-3">
-          {Array.from({ length: 10 }, (_, i) => i).map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          {Array.from({ length: 8 }, (_, i) => i).map((i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -875,6 +1452,17 @@ export function CraftingCalculator() {
     );
   }
 
+  // Determine profession render order
+  const professionOrder: string[] = PROFESSIONS.map(
+    (p) => p.id as string,
+  ).filter((id) => filteredAndGrouped.has(id));
+  // Add any extra professions not in our known list
+  for (const prof of filteredAndGrouped.keys()) {
+    if (!professionOrder.includes(prof)) professionOrder.push(prof);
+  }
+
+  let globalRowOffset = 0;
+
   return (
     <CalculatorLayout
       filters={
@@ -883,12 +1471,8 @@ export function CraftingCalculator() {
           onSearchChange={setSearchTerm}
           professionFilter={professionFilter}
           onProfessionFilterChange={setProfessionFilter}
-          minLevel={minLevel}
           maxLevel={maxLevel}
-          onLevelRangeChange={(min, max) => {
-            setMinLevel(min);
-            setMaxLevel(max);
-          }}
+          onMaxLevelChange={setMaxLevel}
           sortBy={sortBy}
           onSortChange={setSortBy}
           showOnlyPositive={showOnlyPositive}
@@ -898,20 +1482,35 @@ export function CraftingCalculator() {
         />
       }
       results={
-        <div className="space-y-2">
-          <div className="mb-3 flex items-center justify-between">
+        <div>
+          {/* Top profession nav pills — scroll-only, no filtering */}
+          <ProfessionNavPills
+            availableProfessions={availableProfessions}
+            activeProfession={professionFilter}
+          />
+
+          {/* Count */}
+          <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {filteredResults.length} recipes
-              {(recipes?.length ?? 0) > 0 &&
-                filteredResults.length < (recipes?.length ?? 0) &&
-                ` of ${recipes?.length}`}
+              <span className="font-medium text-foreground">
+                {totalFiltered}
+              </span>{" "}
+              recipes
+              {(recipes?.length ?? 0) > totalFiltered && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  of {recipes?.length}
+                </span>
+              )}
             </p>
             <p className="text-xs text-muted-foreground">
-              Sorted by {sortBy} · Expand a row to set prices
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 mr-1 align-middle" />
+              Green dot = price synced from another tab
             </p>
           </div>
 
-          {filteredResults.length === 0 ? (
+          {/* Empty state */}
+          {totalFiltered === 0 ? (
             <div
               data-ocid="crafting.empty_state"
               className="flex h-48 items-center justify-center rounded-xl border border-dashed border-border text-center"
@@ -921,20 +1520,25 @@ export function CraftingCalculator() {
                   No recipes match your filters
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Try adjusting your profession or search
+                  Try adjusting profession or level filter
                 </p>
               </div>
             </div>
           ) : (
-            filteredResults.map((result, index) => {
-              const recipe = recipeMap.get(result.recipeId);
-              if (!recipe) return null;
+            professionOrder.map((profId) => {
+              const profRecipes = filteredAndGrouped.get(profId);
+              if (!profRecipes || profRecipes.length === 0) return null;
+              const offset = globalRowOffset;
+              globalRowOffset += profRecipes.length;
               return (
-                <CraftingProfitRow
-                  key={result.recipeId}
-                  recipe={recipe}
-                  result={result}
-                  rowIndex={index + 1}
+                <ProfessionSection
+                  key={profId}
+                  professionId={profId}
+                  recipes={profRecipes}
+                  results={resultMap}
+                  rowOffset={offset}
+                  itemSourceMap={itemSourceMap}
+                  readOnly={isReadOnly}
                 />
               );
             })
@@ -943,7 +1547,7 @@ export function CraftingCalculator() {
       }
       summary={
         <CraftingSummaryPanel
-          results={summaryResults.filter((r) => {
+          results={allResults.filter((r) => {
             if (
               searchTerm &&
               !r.recipeName.toLowerCase().includes(searchTerm.toLowerCase())

@@ -4,6 +4,7 @@ import { GatheringProfitRow } from "@/components/ProfitRow";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useHerbalism } from "@/hooks/useQueries";
 import { calculateGatheringProfit } from "@/lib/calculator/profitEngine";
 import { usePriceBookStore } from "@/lib/priceBook/store";
@@ -14,7 +15,9 @@ import { useMemo, useState } from "react";
 export function HerbalismCalculator() {
   const { data, isLoading, error, refetch } = useHerbalism();
   const config = useConfigStore();
-  const { getPrice } = usePriceBookStore();
+  const { getPrice, guildMode } = usePriceBookStore();
+  const { isAdmin } = useIsAdmin();
+  const isReadOnly = guildMode && !isAdmin;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("profit");
@@ -173,6 +176,7 @@ export function HerbalismCalculator() {
                 item={item}
                 rowIndex={index + 1}
                 quantityLabel="Plots"
+                readOnly={isReadOnly}
               />
             ))
           )}

@@ -6,6 +6,7 @@ import {
   InternetIdentityProvider,
   useInternetIdentity,
 } from "@/hooks/useInternetIdentity";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { cn } from "@/lib/utils";
 import { AllItemsCalculator } from "@/pages/AllItemsCalculator";
 import { CraftingCalculator } from "@/pages/CraftingCalculator";
@@ -13,6 +14,7 @@ import { FarmingCalculator } from "@/pages/FarmingCalculator";
 import { GuildPlanner } from "@/pages/GuildPlanner";
 import { HerbalismCalculator } from "@/pages/HerbalismCalculator";
 import { HusbandryCalculator } from "@/pages/HusbandryCalculator";
+import { LandPlanner } from "@/pages/LandPlanner";
 import { WoodcuttingCalculator } from "@/pages/WoodcuttingCalculator";
 import {
   BookOpen,
@@ -21,6 +23,7 @@ import {
   Leaf,
   Loader2,
   LogOut,
+  Map as MapIcon,
   PawPrint,
   Sprout,
   Trees,
@@ -36,6 +39,7 @@ type Tab =
   | "herbalism"
   | "woodcutting"
   | "husbandry"
+  | "land"
   | "crafting"
   | "guild";
 
@@ -50,6 +54,7 @@ function AuthButton() {
     isLoggingIn,
     isLoginSuccess,
   } = useInternetIdentity();
+  const { isAdmin, isChecking: isAdminChecking } = useIsAdmin();
 
   const isLoggedIn = isLoginSuccess && !!identity;
   const isLoading = isInitializing || isLoggingIn;
@@ -76,6 +81,11 @@ function AuthButton() {
         <div className="hidden items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 sm:flex">
           <User className="h-3.5 w-3.5 text-violet-400" />
           <span className="font-mono text-xs text-violet-300">{shortId}</span>
+          {!isAdminChecking && isAdmin && (
+            <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded px-1.5 py-0.5 leading-none">
+              Admin
+            </span>
+          )}
         </div>
         <Button
           data-ocid="auth.logout_button"
@@ -146,6 +156,12 @@ function AppContent() {
       label: "Husbandry",
       icon: <PawPrint className="h-4 w-4" />,
       color: "text-orange-400",
+    },
+    {
+      id: "land",
+      label: "Land",
+      icon: <MapIcon className="h-4 w-4" />,
+      color: "text-teal-400",
     },
     {
       id: "crafting",
@@ -223,7 +239,9 @@ function AppContent() {
                     ? "hover:text-violet-400"
                     : tab.id === "crafting" && activeTab !== tab.id
                       ? "hover:text-cyan-400"
-                      : "",
+                      : tab.id === "land" && activeTab !== tab.id
+                        ? "hover:text-teal-400"
+                        : "",
                 )}
               >
                 <span className={activeTab === tab.id ? tab.color : ""}>
@@ -243,6 +261,7 @@ function AppContent() {
         {activeTab === "herbalism" && <HerbalismCalculator />}
         {activeTab === "woodcutting" && <WoodcuttingCalculator />}
         {activeTab === "husbandry" && <HusbandryCalculator />}
+        {activeTab === "land" && <LandPlanner />}
         {activeTab === "crafting" && <CraftingCalculator />}
         {activeTab === "guild" && <GuildPlanner />}
       </main>

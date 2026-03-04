@@ -5,6 +5,7 @@ import { SummaryPanel } from "@/components/SummaryPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useHusbandry } from "@/hooks/useQueries";
 import { calculateHusbandryProfit } from "@/lib/calculator/profitEngine";
 import { usePriceBookStore } from "@/lib/priceBook/store";
@@ -43,7 +44,9 @@ function HusbandryContent({
 }) {
   const { data, isLoading, error, refetch } = useHusbandry();
   const config = useConfigStore();
-  const { getPrice } = usePriceBookStore();
+  const { getPrice, guildMode } = usePriceBookStore();
+  const { isAdmin } = useIsAdmin();
+  const isReadOnly = guildMode && !isAdmin;
 
   const summaryResults = useMemo(() => {
     if (!data) return [];
@@ -205,6 +208,7 @@ function HusbandryContent({
                 item={item}
                 rowIndex={index + 1}
                 mode={mode}
+                readOnly={isReadOnly}
               />
             ))
           )}

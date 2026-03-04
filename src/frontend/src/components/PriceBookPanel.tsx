@@ -17,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useActor } from "@/hooks/useActor";
+import { useInternetIdentity } from "@/hooks/useInternetIdentity";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { usePriceBookStore } from "@/lib/priceBook/store";
 import type { PriceBook } from "@/lib/priceBook/types";
 import {
@@ -24,6 +26,7 @@ import {
   Download,
   Info,
   Loader2,
+  Lock,
   Pencil,
   RefreshCw,
   Search,
@@ -55,6 +58,11 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
   } = usePriceBookStore();
 
   const { actor } = useActor();
+  const { isAdmin } = useIsAdmin();
+  const { login } = useInternetIdentity();
+
+  // In guild mode, only admin can edit
+  const isReadOnly = guildMode && !isAdmin;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -262,13 +270,19 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
               <button
                 type="button"
                 onClick={() => handleToggleGuildMode(true)}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                   guildMode
                     ? "bg-violet-500/20 text-violet-300"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Guild (Shared)
+                {guildMode && isReadOnly && (
+                  <span className="inline-flex items-center gap-0.5 rounded border border-orange-500/40 bg-orange-500/15 px-1 py-0.5 text-[9px] font-semibold text-orange-300 leading-none">
+                    <Lock className="h-2.5 w-2.5" />
+                    Read-only
+                  </span>
+                )}
               </button>
             </div>
 
@@ -304,10 +318,29 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
           </div>
 
           {/* Guild mode info */}
-          {guildMode && (
+          {guildMode && !isReadOnly && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-300">
               <Info className="h-3.5 w-3.5 shrink-0" />
               Prices synced and shared with the entire guild.
+            </div>
+          )}
+
+          {/* Read-only banner for non-admin guild mode */}
+          {isReadOnly && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-300">
+              <Info className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1">
+                Prices are managed by the guild admin. Log in as admin to edit.
+              </span>
+              <Button
+                data-ocid="price_book.login_button"
+                variant="outline"
+                size="sm"
+                className="h-6 gap-1 border-orange-500/30 bg-orange-500/10 px-2 text-[11px] text-orange-300 hover:bg-orange-500/20"
+                onClick={login}
+              >
+                Log in
+              </Button>
             </div>
           )}
         </SheetHeader>
@@ -338,7 +371,8 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
             variant="outline"
             size="sm"
             className="gap-1.5 bg-surface-2 text-xs"
-            onClick={() => importRef.current?.click()}
+            onClick={() => !isReadOnly && importRef.current?.click()}
+            disabled={isReadOnly}
           >
             <Upload className="h-3.5 w-3.5" />
             Import
@@ -354,7 +388,8 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
             data-ocid="price_book.clear_all_button"
             variant="destructive"
             size="sm"
-            onClick={() => void handleClearAll()}
+            onClick={() => !isReadOnly && void handleClearAll()}
+            disabled={isReadOnly}
             className="gap-1.5 text-xs"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -398,7 +433,7 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
                       {entry.itemName}
                     </TableCell>
                     <TableCell className="py-2 text-right">
-                      {editingId === entry.itemId ? (
+                      {!isReadOnly && editingId === entry.itemId ? (
                         <Input
                           type="number"
                           min="0"
@@ -434,39 +469,45 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
                         : new Date(entry.lastUpdated).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="py-2 text-right">
-                      <div className="flex justify-end gap-1">
-                        {editingId === entry.itemId ? (
+                      {isReadOnly ? (
+                        <Lock className="ml-auto h-3 w-3 text-muted-foreground/40" />
+                      ) : (
+                        <div className="flex justify-end gap-1">
+                          {editingId === entry.itemId ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={() =>
+                                void saveEdit(entry.itemId, entry.itemName)
+                              }
+                            >
+                              <Check className="h-3.5 w-3.5 text-profit" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={() =>
+                                startEdit(entry.itemId, entry.price)
+                              }
+                            >
+                              <Pencil className="h-3 w-3 text-muted-foreground" />
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-6 w-6"
                             onClick={() =>
-                              void saveEdit(entry.itemId, entry.itemName)
+                              void handleClearOne(entry.itemId, entry.itemName)
                             }
                           >
-                            <Check className="h-3.5 w-3.5 text-profit" />
+                            <X className="h-3 w-3 text-muted-foreground" />
                           </Button>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={() => startEdit(entry.itemId, entry.price)}
-                          >
-                            <Pencil className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6"
-                          onClick={() =>
-                            void handleClearOne(entry.itemId, entry.itemName)
-                          }
-                        >
-                          <X className="h-3 w-3 text-muted-foreground" />
-                        </Button>
-                      </div>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

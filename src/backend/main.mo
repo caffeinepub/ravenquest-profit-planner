@@ -9,7 +9,9 @@ import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   type InternalCompositeKey = Text;
 
@@ -68,12 +70,16 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Price Book functions (OPEN TO ALL)
+  // Price Book functions (ADMIN ONLY)
   public query ({ caller }) func getPrices() : async [(Nat, PriceEntry)] {
     priceBook.toArray();
   };
 
   public shared ({ caller }) func setPrice(itemId : Nat, itemName : Text, price : Float) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
+
     let entry : PriceEntry = {
       itemId;
       itemName;
@@ -86,10 +92,16 @@ actor {
   };
 
   public shared ({ caller }) func clearPrice(itemId : Nat) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
     priceBook.remove(itemId);
   };
 
   public shared ({ caller }) func clearAll() : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Admin only");
+    };
     priceBook.clear();
   };
 
@@ -107,7 +119,7 @@ actor {
     );
   };
 
-  // Planner (What Are You Growing?) functions
+  // Planner (What Are You Growing?) functions (user only)
   public shared ({ caller }) func setClaim(itemId : Nat, itemName : Text, category : Text, landSize : Text, quantity : Nat) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only authenticated users can set claims");
@@ -156,5 +168,17 @@ actor {
         claim.claimedBy == caller;
       }
     );
+  };
+
+  // USER AUTH/ADMIN QUERY
+  // Note: This function cannot be fully implemented as specified because
+  // AccessControlState is an opaque type with no public API to iterate user roles.
+  // The AccessControl module would need to expose a getUserRoles() method.
+  // For now, this returns null as we cannot access the internal state.
+  public query ({ caller }) func getAdminPrincipal() : async ?Principal {
+    // Cannot iterate accessControlState as it's opaque and has no public iteration API
+    // This would require AccessControl module to expose a method like:
+    // public func getAllUserRoles(state: AccessControlState) : [(Principal, UserRole)]
+    null;
   };
 };

@@ -1,7 +1,7 @@
 import { CalculatorLayout } from "@/components/CalculatorLayout";
 import { Filters, type SortOption } from "@/components/Filters";
 import { GatheringProfitRow } from "@/components/ProfitRow";
-import { SummaryPanel } from "@/components/SummaryPanel";
+import { type BestWindowEntry, SummaryPanel } from "@/components/SummaryPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ import {
   RefreshCw,
   TrendingDown,
   TrendingUp,
+  Trophy,
   Zap,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -414,6 +415,149 @@ function TaggedProfitRow({
   return null;
 }
 
+// ─── Top 5 · 24h Leaderboard ──────────────────────────────────────────────────
+
+interface Top5Item {
+  name: string;
+  category: Exclude<CategoryLabel, "Crafting">;
+  profit24h: number;
+  profitPerHour: number;
+}
+
+const RANK_STYLES = [
+  // #1 gold
+  {
+    badge: "bg-gold/20 text-gold border-gold/40 font-bold",
+    profit: "text-gold glow-gold",
+    card: "border-gold/30 bg-gold/5",
+  },
+  // #2 silver
+  {
+    badge: "bg-slate-400/20 text-slate-300 border-slate-400/30 font-semibold",
+    profit: "text-slate-300",
+    card: "border-slate-400/20 bg-slate-400/5",
+  },
+  // #3 bronze
+  {
+    badge: "bg-amber-700/20 text-amber-600 border-amber-700/30 font-semibold",
+    profit: "text-amber-500",
+    card: "border-amber-700/20 bg-amber-700/5",
+  },
+  // #4 muted
+  {
+    badge: "bg-surface-3 text-muted-foreground border-border",
+    profit: "text-muted-foreground",
+    card: "border-border bg-surface-1",
+  },
+  // #5 muted
+  {
+    badge: "bg-surface-3 text-muted-foreground border-border",
+    profit: "text-muted-foreground",
+    card: "border-border bg-surface-1",
+  },
+];
+
+function Top5Leaderboard({ items }: { items: Top5Item[] }) {
+  return (
+    <div
+      data-ocid="all_items.panel"
+      className="mb-4 rounded-xl border border-border bg-surface-1 px-4 py-3"
+    >
+      {/* Header */}
+      <div className="mb-3 flex items-center gap-2">
+        <Trophy className="h-4 w-4 text-gold" />
+        <span className="text-sm font-semibold tracking-tight">
+          Top 5 · 24h Window
+        </span>
+        <span className="ml-1 text-xs text-muted-foreground">
+          gathering only · most profitable per 24 hours
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <div
+          data-ocid="all_items.empty_state"
+          className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-surface-2/40 py-6 text-center"
+        >
+          <div>
+            <Trophy className="mx-auto mb-2 h-6 w-6 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Set item prices to see your top earners
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground/60">
+              Expand any row and enter sell prices to unlock this leaderboard
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+          {items.map((item, idx) => {
+            const styles = RANK_STYLES[idx] ?? RANK_STYLES[4];
+            return (
+              <div
+                key={item.name}
+                data-ocid={`all_items.item.${idx + 1}`}
+                className={cn(
+                  "flex w-40 shrink-0 flex-col gap-1.5 rounded-lg border p-3 transition-colors",
+                  styles.card,
+                )}
+              >
+                {/* Rank + Category row */}
+                <div className="flex items-center justify-between gap-1">
+                  <span
+                    className={cn(
+                      "inline-flex h-5 w-7 items-center justify-center rounded border text-[11px]",
+                      styles.badge,
+                    )}
+                  >
+                    #{idx + 1}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={`border px-1 py-0 text-[9px] font-medium ${CATEGORY_COLORS[item.category]}`}
+                  >
+                    {item.category}
+                  </Badge>
+                </div>
+
+                {/* Item name */}
+                <div
+                  className="truncate text-xs font-semibold leading-tight"
+                  title={item.name}
+                >
+                  {item.name}
+                </div>
+
+                {/* 24h profit */}
+                <div
+                  className={cn(
+                    "font-num text-base font-bold tabular-nums leading-none",
+                    styles.profit,
+                  )}
+                >
+                  +
+                  {item.profit24h.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}
+                  s
+                </div>
+
+                {/* Sub-line: per hour */}
+                <div className="font-num text-[10px] text-muted-foreground tabular-nums">
+                  {item.profitPerHour.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}
+                  s/h
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AllItemsCalculator() {
@@ -531,6 +675,66 @@ export function AllItemsCalculator() {
       .filter((r) => r.gatheringResult !== undefined)
       .map((r) => r.gatheringResult as ProfitResult);
   }, [allRowResults]);
+
+  // Top 5 items by 24h profit (gathering only, priced items only)
+  const top5_24h = useMemo<Top5Item[]>(() => {
+    const candidates = allTaggedItems
+      .map((tagged, i) => ({ tagged, meta: allRowResults[i] }))
+      .filter(({ tagged, meta }) => {
+        if (tagged.kind === "crafting") return false;
+        if (meta.profitPerHour === null || meta.profitPerHour <= 0)
+          return false;
+        const result = meta.gatheringResult;
+        if (!result || result.confidence === "low") return false;
+        return true;
+      })
+      .map(({ tagged, meta }) => ({
+        name: meta.name,
+        category: (tagged as TaggedGatheringItem).category as Exclude<
+          CategoryLabel,
+          "Crafting"
+        >,
+        profit24h: (meta.profitPerHour ?? 0) * 24,
+        profitPerHour: meta.profitPerHour ?? 0,
+      }));
+    candidates.sort((a, b) => b.profit24h - a.profit24h);
+    return candidates.slice(0, 5);
+  }, [allTaggedItems, allRowResults]);
+
+  // Best item per time window (gathering only)
+  const TIME_WINDOWS = [2, 4, 6, 8, 12, 24];
+
+  const bestByWindow = useMemo<Record<number, BestWindowEntry | null>>(() => {
+    const result: Record<number, BestWindowEntry | null> = {};
+    for (const W of TIME_WINDOWS) {
+      const windowSecs = W * 3600;
+      let best: BestWindowEntry | null = null;
+      for (let i = 0; i < allTaggedItems.length; i++) {
+        const tagged = allTaggedItems[i];
+        const meta = allRowResults[i];
+        if (tagged.kind === "crafting") continue;
+        if (!meta.gatheringResult || meta.gatheringResult.confidence === "low")
+          continue;
+        const harvestTime = tagged.item.growingTime;
+        if (harvestTime <= 0 || harvestTime > windowSecs) continue;
+        const harvests = Math.floor(windowSecs / harvestTime);
+        const windowProfit = meta.profit * harvests;
+        if (windowProfit <= 0) continue;
+        if (!best || windowProfit > best.windowProfit) {
+          best = {
+            name: meta.name,
+            category: tagged.category,
+            windowProfit,
+            harvests,
+            profitPerHarvest: meta.profit,
+            harvestTime,
+          };
+        }
+      }
+      result[W] = best;
+    }
+    return result;
+  }, [allTaggedItems, allRowResults]);
 
   const filteredRows = useMemo(() => {
     const withMeta = allTaggedItems.map((tagged, i) => ({
@@ -666,6 +870,9 @@ export function AllItemsCalculator() {
       }
       results={
         <div className="space-y-2">
+          {/* Top 5 · 24h Leaderboard */}
+          <Top5Leaderboard items={top5_24h} />
+
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {filteredRows.length} items
@@ -721,6 +928,8 @@ export function AllItemsCalculator() {
             return true;
           })}
           totalItems={allTaggedItems.length}
+          top24hItem={top5_24h[0] ?? null}
+          bestByWindow={bestByWindow}
         />
       }
     />

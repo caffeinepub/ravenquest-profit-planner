@@ -36,6 +36,7 @@ export const idlService = IDL.Service({
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'clearAll' : IDL.Func([], [], []),
   'clearPrice' : IDL.Func([IDL.Nat], [], []),
+  'getAdminPrincipal' : IDL.Func([], [IDL.Opt(IDL.Principal)], ['query']),
   'getAttributions' : IDL.Func(
       [],
       [IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Text))],
@@ -97,6 +98,7 @@ export const idlFactory = ({ IDL }) => {
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'clearAll' : IDL.Func([], [], []),
     'clearPrice' : IDL.Func([IDL.Nat], [], []),
+    'getAdminPrincipal' : IDL.Func([], [IDL.Opt(IDL.Principal)], ['query']),
     'getAttributions' : IDL.Func(
         [],
         [IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Text))],

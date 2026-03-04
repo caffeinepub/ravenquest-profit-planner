@@ -1,10 +1,44 @@
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { ProfitResult } from "@/lib/calculator/types";
-import { Award, BarChart3, Database, TrendingUp } from "lucide-react";
+import {
+  Award,
+  BarChart3,
+  Clock,
+  Database,
+  TrendingUp,
+  Trophy,
+} from "lucide-react";
+
+interface Top24hItem {
+  name: string;
+  profit24h: number;
+  profitPerHour: number;
+  category: string;
+}
+
+export interface BestWindowEntry {
+  name: string;
+  category: string;
+  windowProfit: number;
+  harvests: number;
+  profitPerHarvest: number;
+  harvestTime: number;
+}
+
+const CATEGORY_BADGE_COLORS: Record<string, string> = {
+  Farming: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  Herbalism: "bg-lime-500/15 text-lime-400 border-lime-500/30",
+  Woodcutting: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  Husbandry: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  Crafting: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+};
 
 interface SummaryPanelProps {
   results: ProfitResult[];
   totalItems: number;
+  top24hItem?: Top24hItem | null;
+  bestByWindow?: Record<number, BestWindowEntry | null>;
 }
 
 function formatGold(num: number): string {
@@ -14,7 +48,12 @@ function formatGold(num: number): string {
   return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
-export function SummaryPanel({ results, totalItems }: SummaryPanelProps) {
+export function SummaryPanel({
+  results,
+  totalItems,
+  top24hItem,
+  bestByWindow,
+}: SummaryPanelProps) {
   const pricedResults = results.filter((r) => r.confidence !== "low");
   const positiveResults = pricedResults.filter((r) => r.profitPerHarvest > 0);
 
@@ -85,6 +124,132 @@ export function SummaryPanel({ results, totalItems }: SummaryPanelProps) {
       </div>
 
       <Separator />
+
+      {/* Best 24h Earner */}
+      {top24hItem ? (
+        <>
+          <div className="flex items-start gap-2">
+            <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Best 24h Earner
+              </div>
+              <div
+                className="mt-0.5 truncate text-sm font-medium"
+                title={top24hItem.name}
+              >
+                {top24hItem.name}
+              </div>
+              <Badge
+                variant="outline"
+                className="mt-0.5 px-1 py-0 text-[9px] font-medium border-border/50 text-muted-foreground"
+              >
+                {top24hItem.category}
+              </Badge>
+              <div className="font-num mt-1 text-lg font-bold text-gold glow-gold">
+                +
+                {top24hItem.profit24h.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}
+                s
+              </div>
+              <div className="font-num flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                {top24hItem.profitPerHour.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}
+                s/h
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+        </>
+      ) : null}
+
+      {/* Best per Time Window */}
+      {(() => {
+        const TIME_WINDOWS = [2, 4, 6, 8, 12, 24];
+        const hasAnyEntry =
+          bestByWindow && TIME_WINDOWS.some((w) => bestByWindow[w] != null);
+        const hasNoData = !bestByWindow || !hasAnyEntry;
+
+        return (
+          <>
+            <div className="rounded-lg bg-surface-2 p-3">
+              <div className="mb-2.5 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Best per Time Window
+                </span>
+              </div>
+
+              {hasNoData ? (
+                <p className="text-xs text-muted-foreground/70 italic">
+                  Set item prices to unlock
+                </p>
+              ) : (
+                <div className="divide-y divide-border/20">
+                  {TIME_WINDOWS.map((W) => {
+                    const entry = bestByWindow?.[W] ?? null;
+                    return (
+                      <div
+                        key={W}
+                        className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0"
+                      >
+                        {/* Window label */}
+                        <span className="font-mono w-7 shrink-0 text-[11px] text-muted-foreground">
+                          {W}h
+                        </span>
+
+                        {entry ? (
+                          <>
+                            {/* Item name + category */}
+                            <div className="min-w-0 flex-1 flex items-center gap-1.5 overflow-hidden">
+                              <span
+                                className="truncate text-xs font-medium leading-tight"
+                                title={entry.name}
+                              >
+                                {entry.name}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={`shrink-0 border px-1 py-0 text-[9px] font-medium leading-tight ${CATEGORY_BADGE_COLORS[entry.category] ?? "bg-surface-3 text-muted-foreground border-border"}`}
+                              >
+                                {entry.category}
+                              </Badge>
+                            </div>
+
+                            {/* Profit + harvests */}
+                            <div className="shrink-0 text-right">
+                              <div className="font-mono text-[11px] font-semibold tabular-nums text-profit leading-tight">
+                                +
+                                {entry.windowProfit.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}
+                                s
+                              </div>
+                              <div className="font-mono text-[9px] text-muted-foreground tabular-nums leading-tight">
+                                ×{entry.harvests} harvests
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="flex-1 text-xs text-muted-foreground/40">
+                            —
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+          </>
+        );
+      })()}
 
       {/* Best item */}
       {bestItem && bestItem.profitPerHarvest > 0 && (

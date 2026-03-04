@@ -35,6 +35,7 @@ export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     clearAll(): Promise<void>;
     clearPrice(itemId: bigint): Promise<void>;
+    getAdminPrincipal(): Promise<Principal | null>;
     getAttributions(): Promise<Array<[bigint, string]>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;

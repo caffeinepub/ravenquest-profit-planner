@@ -73,9 +73,10 @@ interface PriceInputProps {
   itemId: number;
   itemName: string;
   index: number;
+  readOnly?: boolean;
 }
 
-function PriceInput({ itemId, itemName, index }: PriceInputProps) {
+function PriceInput({ itemId, itemName, index, readOnly }: PriceInputProps) {
   const { getPrice, setPrice } = usePriceBookStore();
   const currentPrice = getPrice(itemId);
   const [localValue, setLocalValue] = useState(
@@ -83,6 +84,7 @@ function PriceInput({ itemId, itemName, index }: PriceInputProps) {
   );
 
   const handleBlur = useCallback(() => {
+    if (readOnly) return;
     const parsed = Number.parseFloat(localValue);
     if (!Number.isNaN(parsed) && parsed >= 0) {
       setPrice(itemId, itemName, parsed);
@@ -90,18 +92,27 @@ function PriceInput({ itemId, itemName, index }: PriceInputProps) {
       // Clear the price
       setPrice(itemId, itemName, 0);
     }
-  }, [localValue, itemId, itemName, setPrice]);
+  }, [localValue, itemId, itemName, setPrice, readOnly]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (readOnly) return;
       setLocalValue(e.target.value);
       const parsed = Number.parseFloat(e.target.value);
       if (!Number.isNaN(parsed) && parsed >= 0) {
         setPrice(itemId, itemName, parsed);
       }
     },
-    [itemId, itemName, setPrice],
+    [itemId, itemName, setPrice, readOnly],
   );
+
+  if (readOnly) {
+    return (
+      <span className="font-mono text-xs tabular-nums text-muted-foreground w-28 text-right block">
+        {currentPrice !== null ? currentPrice.toLocaleString() : "—"}
+      </span>
+    );
+  }
 
   return (
     <Input
@@ -197,6 +208,7 @@ interface GatheringProfitRowProps {
   rowIndex: number;
   quantityLabel?: string;
   categoryBadge?: ReactNode;
+  readOnly?: boolean;
 }
 
 export function GatheringProfitRow({
@@ -204,6 +216,7 @@ export function GatheringProfitRow({
   rowIndex,
   quantityLabel = "Plots",
   categoryBadge,
+  readOnly,
 }: GatheringProfitRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -363,6 +376,7 @@ export function GatheringProfitRow({
                         itemId={output.itemId}
                         itemName={output.itemName}
                         index={rowIndex * 10 + i + 1}
+                        readOnly={readOnly}
                       />
                       <span className="font-num text-xs text-muted-foreground">
                         ea
@@ -525,12 +539,14 @@ interface HusbandryProfitRowProps {
   item: HusbandryItem;
   rowIndex: number;
   mode: "gathering" | "butchering";
+  readOnly?: boolean;
 }
 
 export function HusbandryProfitRow({
   item,
   rowIndex,
   mode,
+  readOnly,
 }: HusbandryProfitRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -703,6 +719,7 @@ export function HusbandryProfitRow({
                         itemId={output.itemId}
                         itemName={output.itemName}
                         index={rowIndex * 10 + i + 1}
+                        readOnly={readOnly}
                       />
                       <span className="font-num text-xs text-muted-foreground">
                         ea
