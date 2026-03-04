@@ -1,3 +1,4 @@
+import { SellHoldBadge } from "@/components/SellHoldBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,6 +23,7 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useMarketDepthStore } from "@/lib/marketDepth/store";
 import { usePriceBookStore } from "@/lib/priceBook/store";
 import type { PriceBook } from "@/lib/priceBook/types";
+import { usePriceHistoryStore } from "@/lib/priceHistory/store";
 import { cn } from "@/lib/utils";
 import {
   Check,
@@ -67,6 +69,7 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
   const isReadOnly = guildMode && !isAdmin;
 
   const { setDepth, getDepth, getLiquidityLabel } = useMarketDepthStore();
+  const { addRecords: addPriceHistoryRecords } = usePriceHistoryStore();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -158,6 +161,16 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
     const parsed = Number.parseFloat(editingValue);
     if (!Number.isNaN(parsed) && parsed >= 0) {
       setPrice(id, itemName, parsed);
+      // Record price history for manual edits
+      addPriceHistoryRecords([
+        {
+          itemId: id,
+          itemName,
+          price: parsed,
+          timestamp: Date.now(),
+          source: "manual",
+        },
+      ]);
       setEditingId(null);
       if (guildMode && actor) {
         try {
@@ -438,7 +451,16 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
                   return (
                     <TableRow key={entry.itemId} className="border-border">
                       <TableCell className="py-2 text-sm font-medium">
-                        {entry.itemName}
+                        <div className="flex items-center gap-2">
+                          <span>{entry.itemName}</span>
+                          <SellHoldBadge
+                            itemId={entry.itemId}
+                            currentPrice={
+                              editingId === entry.itemId ? null : entry.price
+                            }
+                            size="xs"
+                          />
+                        </div>
                       </TableCell>
                       <TableCell className="py-2 text-right">
                         {!isReadOnly && editingId === entry.itemId ? (

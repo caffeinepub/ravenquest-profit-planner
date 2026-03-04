@@ -2,183 +2,105 @@
 
 ## Current State
 
-- `App.tsx`: Header → GlobalSettingsBar → sticky tab nav → tab content. No global price-input bar.
-- `GrowTimeStrategy.tsx`: Strategy tab with band cards, QuickIndicator, BandComparison table, AISummaryPanel, MarketFloodWarning, ChatPriceInput+ScreenshotImport, SnapshotPanel. Player Status and Land Type selectors are local to this page.
-- `configStore.ts`: persists `landSize` / `landMultiplier` / `marketFeePercent` / `craftTaxPercent`. Land options: small(1x) medium(2x) large(4x) stronghold(8x) fort(20x).
-- `growTimeBands.ts`: `BandStats`, `computeBandStats`, `getBandForItem`, `husbandryToGathering`, `GROW_TIME_BANDS`. `BandStats` has: `band`, `avgSilverPerHour`, `topSilverPerHour`, `totalPotentialSilver`, `itemCount`, `pricedItemCount`, `hasData`.
-- `profitEngine.ts`: `calculateGatheringProfit(item, qty, config) → ProfitResult`, `CalculationConfig = {landMultiplier, marketFeePercent, getPrice}`.
-- `marketDepth/store.ts`: per-item buy/sell order quantities, `getLiquidityLabel`.
-- `ImageCropTool.tsx`: interactive crop overlay (already built).
-- `ScreenshotImport.tsx`: full pipeline crop→preprocess→OCR→review table (recently rebuilt).
-- `ChatPriceInput.tsx`: collapsible text-based price entry.
+- `GrowTimeStrategy.tsx` is the Strategy/Opportunities page. It shows band cards (FAST/ACTIVE/MID/SLEEP/AWAY) with avgSilverPerHour and topSilverPerHour per band. The BandCard component displays s/h as the primary metric.
+- `AISummaryPanel.tsx` shows "Top bands by silver/hour" listing the top 3 bands with `.slice(0, 3)`.
+- `SummaryPanel.tsx` (used in AllItemsCalculator and individual calculators) shows "Best 24h Earner" and "Best per Time Window" section.
+- `GlobalChatBar.tsx` has `computeUpdateSummary` which calculates top5 items by silver/hour and fortTop3 (3 items). The `/update` command output labels use silver/hr as the primary ranking. The `UpdateSummaryMessage` component renders "Top Items" by s/hr.
+- Currently the default sort/rank in tables is silver/hour, not profit per 24h.
+- There is no "Best For Time Window" dropdown on the Strategy page.
+- The ranking in all result tables across calculators shows silver/hour as the primary metric.
 
 ## Requested Changes (Diff)
 
 ### Add
 
-**1. Land Inventory Store (`lib/landInventory/store.ts`)**
-Persisted Zustand store tracking the user's owned lands:
-```typescript
-export type PlotType = 'crop' | 'herb' | 'tree' | 'animal';
-export type LandType = 'fort' | 'large';
+1. **"Best For Time Window" dropdown** near the top of the Strategy page (in the sticky controls row), labeled "Best For Time Window", with options: 2h, 6h, 8h, 12h, 16h, 24h, Custom (user enters hours). Selecting a window filters the ranked results to items whose grow time is within a tolerance:
+   - 2h window: 1h–2h
+   - 6h window: 4h–6h
+   - 8h window: 6h–8h
+   - 12h window: 8h–12h
+   - 16h window: 12h–16h
+   - 24h window: 16h–24h
+   - Custom: ±20% around entered hours
+   The dropdown should influence the QuickIndicator and band highlighting to show which band matches the selected window.
 
-export interface LandSlot {
-  id: string;           // uuid
-  landType: LandType;   // fort | large
-  plotType: PlotType;   // crop | herb | tree | animal
-  rowCount: number;     // 1–8 rows within this land (fort has up to 4 rows)
-}
+2. **Profit per 24h calculation** — add a utility: `profitPer24h = (profitPerCycle) × (24 / growTimeHours)` where `profitPerCycle = (sellPrice - cost) × expectedYield × landMultiplier`. This can be derived from existing `profitPerHarvest` and `growingTime` fields already computed by `calculateGatheringProfit`.
 
-export interface LandInventoryState {
-  slots: LandSlot[];
-  addSlot: (slot: Omit<LandSlot, 'id'>) => void;
-  updateSlot: (id: string, patch: Partial<Omit<LandSlot, 'id'>>) => void;
-  removeSlot: (id: string) => void;
-  clearAll: () => void;
-  totalFortRows: () => number;
-  totalLargeRows: () => number;
-}
-```
-Persist key: `rq-land-inventory:v1`.
-
-**2. Land Advisor Store (`lib/landAdvisor/store.ts`)**
-Persisted Zustand store for the land screenshot advisor state:
-```typescript
-export type PlotStatus = 'empty' | 'growing' | 'ready' | 'unknown';
-
-export interface DetectedSlot {
-  slotIndex: number;
-  plotType: PlotType;
-  status: PlotStatus;
-  confidence: number;  // 0–1
-  // editable by user:
-  editedPlotType?: PlotType;
-  editedStatus?: PlotStatus;
-}
-
-export interface LandAdvisorState {
-  detectedLandType: LandType | null;
-  detectedSlots: DetectedSlot[];
-  confirmedSlots: DetectedSlot[];  // after user confirms/edits
-  imageUrl: string | null;
-  stage: 'idle' | 'image_loaded' | 'cropping' | 'processing' | 'review' | 'recommendations';
-  setStage: (s: LandAdvisorState['stage']) => void;
-  setDetected: (landType: LandType, slots: DetectedSlot[]) => void;
-  confirmSlots: (slots: DetectedSlot[]) => void;
-  reset: () => void;
-}
-```
-Do NOT persist `imageUrl` (too large). Persist `confirmedSlots` and `detectedLandType`. Persist key: `rq-land-advisor:v1`.
-
-**3. Land Screenshot Advisor component (`components/LandAdvisor.tsx`)**
-Full-featured dialog/panel triggered by a persistent "Analyze Land Screenshot" button.
-
-Flow stages:
-- **idle**: Drop zone (paste / upload). Also shows a "Manual Setup" fallback button.
-- **image_loaded**: Shows `ImageCropTool` to select just the land area.
-- **processing**: Spinner while OCR/heuristic runs.
-- **review**: Editable grid of detected slots + confirmation.
-- **recommendations**: Per-slot top-3 item recommendations.
-
-**Vision heuristic** (no external AI — purely heuristic using image analysis on canvas):
-Since true computer vision is not available, use the **Fallback mode** directly but keep the screenshot as a visual reference shown on screen. Detection is purely manual + heuristic:
-- After the user crops and confirms, show the cropped image alongside an editable slot grid.
-- Pre-populate slot count by trying to detect horizontal bands in the cropped image (divide image height into N equal bands where N = detected row count estimate based on image dimensions).
-- Confidence defaults to 0.4 (low) for all auto-detected rows → user must confirm each.
-- The "Manual Setup" path skips image upload entirely and goes straight to the review/edit grid.
-
-**Edit grid UI**:
-- Each row: slot number | Land Type selector (Fort/Large) | Plot Type selector (Crop/Herb/Tree/Animal) | Status selector (Empty/Growing/Ready/Unknown) | Confidence badge | Delete button
-- Toolbar buttons: "Add Slot", "Mark All Empty", "Set All Fort", "Set All Large"
-- Fort selector sets `rowCount` = 4 (per fort), Large sets `rowCount` = 1
-- "Confirm & Get Recommendations" button → triggers recommendation engine
-
-**Recommendation engine** (pure TypeScript, uses existing `calculateGatheringProfit`):
-For each **empty** or **unknown** slot:
-- Filter `allGatheringItems` by plot type:
-  - `crop`: category contains "farming" (or no herb/tree/animal keyword)
-  - `herb`: category contains "herb" or "herbalism"
-  - `tree`: category contains "tree" or "wood"
-  - `animal`: category contains "husbandry" or "animal"
-- For each candidate item, compute `calculateGatheringProfit(item, 1, config)` with the slot's land multiplier
-- Apply Player Status filter:
-  - Active → prefer items in FAST or ACTIVE band (growTime ≤ 6h), but show all sorted by s/h
-  - Sleeping → prefer SLEEP band (8–16h)
-  - Away → prefer AWAY band (16h+)
-- Sort by `profitPerHour` descending
-- Return top 3 per slot
-- Row cap: skip items already recommended in 2+ other slots (default cap = 2, configurable)
-- Liquidity: if `getLiquidityLabel(dropId) === 'low'` → show ⚠ badge but don't hide
-
-**Recommendation output per slot**:
-Show a card per empty slot:
-```
-Slot 2 — Fort, Herb plot (Empty)
-─────────────────────────────────────────
-1. Brightday      6h    420,000 s/h   Low flood risk   [Add to Plan]
-2. Thin Roots     2h    310,000 s/h   Unknown          [Add to Plan]
-3. Juicy Roots    2h    290,000 s/h   Medium risk      [Add to Plan]
-```
-"Add to Plan" button inserts into land inventory (slot in `landInventory` store). If no prices are set for any item in the filtered list, show "Set prices in the Price Book to see recommendations."
-
-**4. Strategy tab: Land Inventory Panel**
-Inside `GrowTimeStrategy.tsx`, add a new section **"My Lands"** above the Band Cards section:
-- Shows a compact grid of the user's configured lands from `landInventory` store
-- "Add Land" button → opens a small inline form: Land Type (Fort/Large), Plot Type (Crop/Herb/Tree/Animal), Rows (1–8)
-- Each land slot shows: land type icon, plot type label, row count, a remove button
-- Fort total rows and Large total rows shown as summary badges (e.g. "8 Fort rows · 2 Large plots")
-- If the user has no lands configured, show a prompt: "Configure your lands to get personalised recommendations."
-- The `totalFortRows()` and `totalLargeRows()` values feed into the recommendation engine's row-cap logic
-
-**5. "Analyze Land Screenshot" global button in `App.tsx`**
-Add a slim persistent bar between `GlobalSettingsBar` and the tab nav:
-- Contains a single button: "🔍 Analyze Land Screenshot"
-- Opens `LandAdvisor` as a full-screen `Sheet` (shadcn side-panel from the right, width ~50vw on desktop, full on mobile)
-- Button always visible regardless of active tab
-- Also wire the `LandAdvisor` into the Strategy tab inline (optional anchor section) so the user can access it in context there too
-
-**6. `configStore.ts` additions**
-Add `playerStatus: PlayerStatus` (default `'active'`) and `rowCap: number` (default 2) to the config store so they persist globally and are shared between the Strategy tab and the Land Advisor.
+3. **"Per 24h" column** in band comparison table and BandCard stats — add a stat showing total profit per 24h beside avg/h.
 
 ### Modify
 
-- **`GrowTimeStrategy.tsx`**:
-  - Replace local `playerStatus` state with `configStore.playerStatus` (now persisted)
-  - Replace local `rowCap` state with `configStore.rowCap`
-  - Add "My Lands" section (land inventory panel, new) above Band Cards
-  - The `LandMultiplierSelect` in the sticky header continues to set `configStore.landSize`
+1. **"Top 3" → "Top 5"** everywhere:
+   - `AISummaryPanel.tsx`: change `.slice(0, 3)` to `.slice(0, 5)` in ranked bands list.
+   - `GlobalChatBar.tsx` `computeUpdateSummary`: `fortTop3` and `overnightTop3` → `fortTop5` and `overnightTop5` (rename and change `.slice(0, 3)` to `.slice(0, 5)`). Update `UpdateSummaryMessage` section headers and `UpdateSummary` interface types accordingly.
+   - Any other place showing "Top 3" text or limiting to 3.
 
-- **`App.tsx`**:
-  - Add the "Analyze Land Screenshot" bar between `GlobalSettingsBar` and tab nav
-  - Import and render `LandAdvisor` as a `Sheet`
+2. **Default ranking metric → "Best 24 Hours"**:
+   - In `AllItemsCalculator.tsx`: add `profit24h` to the computation for each item row. Formula: `profitPerHarvest × (24 / (growingTime / 3600))`. Display it as the primary metric in the row (replacing or adding alongside s/h). Change default sort to profit24h descending.
+   - In the individual calculators (Farming, Herbalism, Woodcutting, Husbandry), likewise show profit24h as the primary displayed metric and default sort.
+   - In `SummaryPanel.tsx` time-window section: currently shows best item for 2/4/6/8/12/24h windows. Change label to "Top 5 (24h profit)" where relevant and ensure it shows profit per 24h as the primary number.
 
-- **`configStore.ts`**:
-  - Add `playerStatus: PlayerStatus` + `rowCap: number` + setters
-  - Bump persist key to `rq-config:v2`
+3. **Tables/cards display updates** — wherever results are shown:
+   - Show "Profit/24h" as the main number (large/bold).
+   - Show "Per harvest" as secondary.
+   - Show "Grow time" prominently.
+   - Show "Last updated" timestamp if available (from PriceBook metadata).
+   - Silver/hour as optional tertiary stat.
+
+4. **Chat command output** — `/update` response in `GlobalChatBar.tsx`:
+   - "Top Items" section should now rank by profit24h by default.
+   - Label output as "Top 5 (24h profit)" instead of "Top Items by s/hr".
+   - `fortTop5` should also rank by profit24h for fort multiplier.
+   - `overnightTop5` keeps its current logic (SLEEP band).
+
+5. **BandCard and band comparison table** — add "Avg profit/24h" as the displayed metric alongside or replacing avg s/h where the 24h window makes more sense.
 
 ### Remove
 
-- Local `useState` for `playerStatus` and `rowCap` in `GrowTimeStrategy.tsx` (moved to store)
+- Nothing removed. Silver/hour is kept as a secondary/optional stat.
 
 ## Implementation Plan
 
-1. **`lib/landInventory/store.ts`** — Zustand persist store for owned land slots. Expose `totalFortRows()` and `totalLargeRows()` computed getters.
+1. **Add `profitPer24h` helper** to `profitEngine.ts` or inline it where needed:
+   ```
+   function computeProfit24h(profitPerHarvest: number, growingTimeSecs: number): number {
+     const hours = growingTimeSecs / 3600;
+     if (hours <= 0) return 0;
+     return profitPerHarvest * (24 / hours);
+   }
+   ```
 
-2. **`lib/landAdvisor/store.ts`** — Zustand store for advisor UI stage, detected slots, confirmed slots. No image URL persistence.
+2. **Update `AISummaryPanel.tsx`**: change `.slice(0, 3)` to `.slice(0, 5)`. Show top 5 bands, not 3.
 
-3. **`store/configStore.ts`** — Add `playerStatus: PlayerStatus`, `rowCap: number`, `setPlayerStatus`, `setRowCap`. Bump persist key to `rq-config:v2`.
+3. **Update `GlobalChatBar.tsx`**:
+   - Rename `fortTop3` → `fortTop5`, `overnightTop3` → `overnightTop5`.
+   - Change slices from 3 to 5.
+   - Add profit24h sorting for top5 and fortTop5 (use `profitPerHarvest × (24 / (growingTime/3600))`).
+   - Update label in `UpdateSummaryMessage` to "Top 5 (24h profit)" and "Best Fort Row (20x) — 24h".
+   - Update `UpdateSummary` interface.
 
-4. **`components/LandAdvisor.tsx`** — Full component:
-   - Sheet wrapper with open/close prop
-   - Stage machine: idle → image_loaded → cropping → processing → review → recommendations
-   - Crop + heuristic detection (canvas height-band counting)
-   - Editable slot grid with toolbar
-   - Recommendation engine (pure TS, uses `calculateGatheringProfit` + `getLiquidityLabel`)
-   - Per-slot top-3 output cards with "Add to Plan" buttons
-   - Manual Setup fallback (skip image, jump straight to review grid)
+4. **Update `GrowTimeStrategy.tsx`**:
+   - Add "Best For Time Window" dropdown to the sticky controls row.
+   - Implement time-window tolerance logic to determine which band corresponds to the selected window.
+   - Highlight the matching band card (similar to isPreferred highlighting).
+   - Store selected time window in local state.
+   - When a time window is selected, show filtered items for that window in a new panel below the band cards.
+   - Update BandCard stats to show profit/24h as an additional stat.
 
-5. **`pages/GrowTimeStrategy.tsx`** — Add "My Lands" panel section. Wire `playerStatus` and `rowCap` to `configStore`. Import `useLandInventoryStore` for totals display.
+5. **Update `AllItemsCalculator.tsx`**:
+   - Add profit24h column to the rows (shown as main number).
+   - Change default sort order to `profit24h` descending.
+   - Add "Grow time" column.
+   - Add "Last updated" timestamp display next to price.
+   - Update sort options to include "Profit / 24h" as the default option.
 
-6. **`App.tsx`** — Add "Analyze Land Screenshot" slim bar + `LandAdvisor` Sheet.
+6. **Update `SummaryPanel.tsx`**:
+   - In "Best per Time Window", rank by profit24h (not just windowProfit, which is already a form of 24h calc).
+   - Update labels to reflect "24h profit" terminology.
+   - The existing `BestWindowEntry.windowProfit` already computes `floor(Window ÷ HarvestTime) × profitPerHarvest` — this should be renamed/clarified as "24h profit" or kept as is but labeled correctly.
 
-7. **Validate**: `npm run typecheck && npm run build` — fix all errors.
+7. **Update individual calculators** (Farming, Herbalism, Woodcutting, Husbandry):
+   - Add profit24h to result rows.
+   - Default sort by profit24h.
+   - Show grow time prominently.
+   - Show last updated timestamp when price has one.

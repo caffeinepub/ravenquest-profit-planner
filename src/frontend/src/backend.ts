@@ -89,6 +89,27 @@ export class ExternalBlob {
         return this;
     }
 }
+export interface PriceHistoryInput {
+    itemId: bigint;
+    source: string;
+    updatedBy: string;
+    itemName: string;
+    price: number;
+}
+export interface PriceHistoryEntry {
+    itemId: bigint;
+    source: string;
+    updatedBy: string;
+    timestamp: bigint;
+    itemName: string;
+    price: number;
+}
+export interface BaselineResult {
+    method: string;
+    baseline: number;
+    volatility: number;
+    dataPoints: bigint;
+}
 export interface GrowingClaim {
     itemId: bigint;
     claimedAt: bigint;
@@ -115,15 +136,19 @@ export enum UserRole {
 }
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
+    addPriceHistory(entries: Array<PriceHistoryInput>): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     clearAll(): Promise<void>;
     clearPrice(itemId: bigint): Promise<void>;
     getAdminPrincipal(): Promise<Principal | null>;
+    getAllPriceHistory(limit: bigint): Promise<Array<PriceHistoryEntry>>;
     getAttributions(): Promise<Array<[bigint, string]>>;
+    getBaseline(itemId: bigint): Promise<BaselineResult>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getClaims(): Promise<Array<GrowingClaim>>;
     getMyClaims(): Promise<Array<GrowingClaim>>;
+    getPriceHistory(itemId: bigint, limit: bigint): Promise<Array<PriceHistoryEntry>>;
     getPrices(): Promise<Array<[bigint, PriceEntry]>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
@@ -146,6 +171,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor._initializeAccessControlWithSecret(arg0);
+            return result;
+        }
+    }
+    async addPriceHistory(arg0: Array<PriceHistoryInput>): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addPriceHistory(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addPriceHistory(arg0);
             return result;
         }
     }
@@ -205,6 +244,20 @@ export class Backend implements backendInterface {
             return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getAllPriceHistory(arg0: bigint): Promise<Array<PriceHistoryEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllPriceHistory(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllPriceHistory(arg0);
+            return result;
+        }
+    }
     async getAttributions(): Promise<Array<[bigint, string]>> {
         if (this.processError) {
             try {
@@ -216,6 +269,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getAttributions();
+            return result;
+        }
+    }
+    async getBaseline(arg0: bigint): Promise<BaselineResult> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getBaseline(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getBaseline(arg0);
             return result;
         }
     }
@@ -272,6 +339,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getMyClaims();
+            return result;
+        }
+    }
+    async getPriceHistory(arg0: bigint, arg1: bigint): Promise<Array<PriceHistoryEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getPriceHistory(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getPriceHistory(arg0, arg1);
             return result;
         }
     }

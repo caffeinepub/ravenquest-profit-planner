@@ -248,6 +248,21 @@ export function calculateCraftingProfit(
   };
 }
 
+// ─── Profit per 24h helper ─────────────────────────────────────────────────────
+
+/**
+ * Compute the expected profit over a 24-hour window.
+ * Formula: profitPerHarvest × (24h / growTimeHours)
+ */
+export function computeProfit24h(
+  profitPerHarvest: number,
+  growingTimeSecs: number,
+): number {
+  const hours = growingTimeSecs / 3600;
+  if (hours <= 0) return 0;
+  return profitPerHarvest * (24 / hours);
+}
+
 export function calculateHusbandryProfit(
   item: HusbandryItem,
   mode: "gathering" | "butchering",

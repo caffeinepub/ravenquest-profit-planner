@@ -225,11 +225,14 @@ export function SummaryPanel({
                       className="max-w-xs text-xs"
                       data-ocid="summary.time_window.tooltip"
                     >
-                      <p className="mb-1 font-semibold">Best per Time Window</p>
+                      <p className="mb-1 font-semibold">
+                        Best per Time Window (24h Potential)
+                      </p>
                       <p className="mb-2 text-muted-foreground">
                         For each time window (e.g. 6h), finds the gathering item
-                        with the highest total profit if harvested back-to-back
-                        within that window.
+                        with the highest total 24h profit potential — how much
+                        you&apos;d earn if you harvested back-to-back within
+                        that window.
                       </p>
                       <p className="mb-2 font-mono text-[11px] text-foreground/80">
                         floor(Window ÷ Harvest Time) × Profit per Harvest

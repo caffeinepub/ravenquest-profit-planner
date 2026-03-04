@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useFarming } from "@/hooks/useQueries";
-import { calculateGatheringProfit } from "@/lib/calculator/profitEngine";
+import {
+  calculateGatheringProfit,
+  computeProfit24h,
+} from "@/lib/calculator/profitEngine";
 import { usePriceBookStore } from "@/lib/priceBook/store";
 import { useConfigStore } from "@/store/configStore";
 import { AlertCircle, RefreshCw } from "lucide-react";
@@ -20,7 +23,7 @@ export function FarmingCalculator() {
   const isReadOnly = guildMode && !isAdmin;
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("profit");
+  const [sortBy, setSortBy] = useState<SortOption>("profit24h");
   const [minSkill, setMinSkill] = useState(1);
   const [maxSkill, setMaxSkill] = useState(100);
   const [showOnlyPositive, setShowOnlyPositive] = useState(false);
@@ -42,14 +45,18 @@ export function FarmingCalculator() {
     if (!data) return [];
 
     // Pre-compute for sorting (quantity=1 for comparisons)
-    const withResults = data.map((item) => ({
-      item,
-      result: calculateGatheringProfit(item, 1, {
+    const withResults = data.map((item) => {
+      const result = calculateGatheringProfit(item, 1, {
         landMultiplier: config.landMultiplier,
         marketFeePercent: config.marketFeePercent,
         getPrice,
-      }),
-    }));
+      });
+      const profit24h = computeProfit24h(
+        result.profitPerHarvest,
+        item.growingTime,
+      );
+      return { item, result, profit24h };
+    });
 
     let filtered = withResults.filter(({ item, result }) => {
       if (
@@ -65,6 +72,8 @@ export function FarmingCalculator() {
 
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case "profit24h":
+          return b.profit24h - a.profit24h;
         case "profit":
           return b.result.profitPerHarvest - a.result.profitPerHarvest;
         case "profitPerHour":

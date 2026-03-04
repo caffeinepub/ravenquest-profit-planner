@@ -39,7 +39,7 @@ export function AISummaryPanel({
   const ranked = [...bandStats]
     .filter((b) => b.hasData)
     .sort((a, b) => b.avgSilverPerHour - a.avgSilverPerHour)
-    .slice(0, 3);
+    .slice(0, 5);
 
   const hasAnyData = ranked.length > 0;
 
@@ -105,7 +105,7 @@ export function AISummaryPanel({
           {ranked.length > 0 && (
             <div className="pt-1 space-y-0.5">
               <p className="text-muted-foreground text-xs">
-                Top bands by silver/hour:
+                Top 5 bands by silver/hour:
               </p>
               {ranked.map((b, i) => {
                 const isFirst = i === 0;

@@ -7,6 +7,27 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
+export interface PriceHistoryInput {
+    itemId: bigint;
+    source: string;
+    updatedBy: string;
+    itemName: string;
+    price: number;
+}
+export interface PriceHistoryEntry {
+    itemId: bigint;
+    source: string;
+    updatedBy: string;
+    timestamp: bigint;
+    itemName: string;
+    price: number;
+}
+export interface BaselineResult {
+    method: string;
+    baseline: number;
+    volatility: number;
+    dataPoints: bigint;
+}
 export interface GrowingClaim {
     itemId: bigint;
     claimedAt: bigint;
@@ -32,15 +53,19 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
+    addPriceHistory(entries: Array<PriceHistoryInput>): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     clearAll(): Promise<void>;
     clearPrice(itemId: bigint): Promise<void>;
     getAdminPrincipal(): Promise<Principal | null>;
+    getAllPriceHistory(limit: bigint): Promise<Array<PriceHistoryEntry>>;
     getAttributions(): Promise<Array<[bigint, string]>>;
+    getBaseline(itemId: bigint): Promise<BaselineResult>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getClaims(): Promise<Array<GrowingClaim>>;
     getMyClaims(): Promise<Array<GrowingClaim>>;
+    getPriceHistory(itemId: bigint, limit: bigint): Promise<Array<PriceHistoryEntry>>;
     getPrices(): Promise<Array<[bigint, PriceEntry]>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;

@@ -1,3 +1,4 @@
+import { GlobalChatBar } from "@/components/GlobalChatBar";
 import { GlobalSettingsBar } from "@/components/GlobalSettingsBar";
 import { LandAdvisor } from "@/components/LandAdvisor";
 import { PriceBookPanel } from "@/components/PriceBookPanel";
@@ -17,6 +18,7 @@ import { GuildPlanner } from "@/pages/GuildPlanner";
 import { HerbalismCalculator } from "@/pages/HerbalismCalculator";
 import { HusbandryCalculator } from "@/pages/HusbandryCalculator";
 import { LandPlanner } from "@/pages/LandPlanner";
+import { TrendsPage } from "@/pages/TrendsPage";
 import { WoodcuttingCalculator } from "@/pages/WoodcuttingCalculator";
 import { useConfigStore } from "@/store/configStore";
 import {
@@ -32,6 +34,7 @@ import {
   Sprout,
   Timer,
   Trees,
+  TrendingUp,
   User,
   Users,
 } from "lucide-react";
@@ -47,7 +50,8 @@ type Tab =
   | "husbandry"
   | "land"
   | "crafting"
-  | "guild";
+  | "guild"
+  | "trends";
 
 // ─── Auth Button ──────────────────────────────────────────────────────────────
 
@@ -189,6 +193,12 @@ function AppContent() {
       icon: <Users className="h-4 w-4" />,
       color: "text-violet-400",
     },
+    {
+      id: "trends",
+      label: "Trends",
+      icon: <TrendingUp className="h-4 w-4" />,
+      color: "text-rose-400",
+    },
   ];
 
   return (
@@ -251,6 +261,9 @@ function AppContent() {
         </div>
       </div>
 
+      {/* ── Global Chat Bar ── */}
+      <GlobalChatBar />
+
       {/* ── Tab Navigation ── */}
       <nav className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4">
@@ -298,6 +311,7 @@ function AppContent() {
         {activeTab === "land" && <LandPlanner />}
         {activeTab === "crafting" && <CraftingCalculator />}
         {activeTab === "guild" && <GuildPlanner />}
+        {activeTab === "trends" && <TrendsPage />}
       </main>
 
       {/* ── Price Book Panel ── */}

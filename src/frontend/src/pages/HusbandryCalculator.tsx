@@ -7,7 +7,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useHusbandry } from "@/hooks/useQueries";
-import { calculateHusbandryProfit } from "@/lib/calculator/profitEngine";
+import {
+  calculateHusbandryProfit,
+  computeProfit24h,
+} from "@/lib/calculator/profitEngine";
 import { usePriceBookStore } from "@/lib/priceBook/store";
 import { useConfigStore } from "@/store/configStore";
 import { AlertCircle, RefreshCw } from "lucide-react";
@@ -78,14 +81,17 @@ function HusbandryContent({
       return time > 0 && drops !== null && drops.length > 0;
     });
 
-    const withResults = available.map((item) => ({
-      item,
-      result: calculateHusbandryProfit(item, mode, 1, {
+    const withResults = available.map((item) => {
+      const result = calculateHusbandryProfit(item, mode, 1, {
         landMultiplier: config.landMultiplier,
         marketFeePercent: config.marketFeePercent,
         getPrice,
-      }),
-    }));
+      });
+      const harvestTime =
+        mode === "gathering" ? item.time.gathering : item.time.butchering;
+      const profit24h = computeProfit24h(result.profitPerHarvest, harvestTime);
+      return { item, result, profit24h };
+    });
 
     let filtered = withResults.filter(({ item, result }) => {
       if (
@@ -101,6 +107,8 @@ function HusbandryContent({
 
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case "profit24h":
+          return b.profit24h - a.profit24h;
         case "profit":
           return b.result.profitPerHarvest - a.result.profitPerHarvest;
         case "profitPerHour":
@@ -235,7 +243,7 @@ function HusbandryContent({
 
 export function HusbandryCalculator() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("profit");
+  const [sortBy, setSortBy] = useState<SortOption>("profit24h");
   const [minSkill, setMinSkill] = useState(1);
   const [maxSkill, setMaxSkill] = useState(100);
   const [showOnlyPositive, setShowOnlyPositive] = useState(false);

@@ -8,10 +8,31 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const PriceHistoryInput = IDL.Record({
+  'itemId' : IDL.Nat,
+  'source' : IDL.Text,
+  'updatedBy' : IDL.Text,
+  'itemName' : IDL.Text,
+  'price' : IDL.Float64,
+});
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
   'guest' : IDL.Null,
+});
+export const PriceHistoryEntry = IDL.Record({
+  'itemId' : IDL.Nat,
+  'source' : IDL.Text,
+  'updatedBy' : IDL.Text,
+  'timestamp' : IDL.Int,
+  'itemName' : IDL.Text,
+  'price' : IDL.Float64,
+});
+export const BaselineResult = IDL.Record({
+  'method' : IDL.Text,
+  'baseline' : IDL.Float64,
+  'volatility' : IDL.Float64,
+  'dataPoints' : IDL.Nat,
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 export const GrowingClaim = IDL.Record({
@@ -33,19 +54,31 @@ export const PriceEntry = IDL.Record({
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  'addPriceHistory' : IDL.Func([IDL.Vec(PriceHistoryInput)], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'clearAll' : IDL.Func([], [], []),
   'clearPrice' : IDL.Func([IDL.Nat], [], []),
   'getAdminPrincipal' : IDL.Func([], [IDL.Opt(IDL.Principal)], ['query']),
+  'getAllPriceHistory' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Vec(PriceHistoryEntry)],
+      ['query'],
+    ),
   'getAttributions' : IDL.Func(
       [],
       [IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Text))],
       ['query'],
     ),
+  'getBaseline' : IDL.Func([IDL.Nat], [BaselineResult], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
   'getMyClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
+  'getPriceHistory' : IDL.Func(
+      [IDL.Nat, IDL.Nat],
+      [IDL.Vec(PriceHistoryEntry)],
+      ['query'],
+    ),
   'getPrices' : IDL.Func(
       [],
       [IDL.Vec(IDL.Tuple(IDL.Nat, PriceEntry))],
@@ -70,10 +103,31 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const PriceHistoryInput = IDL.Record({
+    'itemId' : IDL.Nat,
+    'source' : IDL.Text,
+    'updatedBy' : IDL.Text,
+    'itemName' : IDL.Text,
+    'price' : IDL.Float64,
+  });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'user' : IDL.Null,
     'guest' : IDL.Null,
+  });
+  const PriceHistoryEntry = IDL.Record({
+    'itemId' : IDL.Nat,
+    'source' : IDL.Text,
+    'updatedBy' : IDL.Text,
+    'timestamp' : IDL.Int,
+    'itemName' : IDL.Text,
+    'price' : IDL.Float64,
+  });
+  const BaselineResult = IDL.Record({
+    'method' : IDL.Text,
+    'baseline' : IDL.Float64,
+    'volatility' : IDL.Float64,
+    'dataPoints' : IDL.Nat,
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
   const GrowingClaim = IDL.Record({
@@ -95,19 +149,31 @@ export const idlFactory = ({ IDL }) => {
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'addPriceHistory' : IDL.Func([IDL.Vec(PriceHistoryInput)], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'clearAll' : IDL.Func([], [], []),
     'clearPrice' : IDL.Func([IDL.Nat], [], []),
     'getAdminPrincipal' : IDL.Func([], [IDL.Opt(IDL.Principal)], ['query']),
+    'getAllPriceHistory' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Vec(PriceHistoryEntry)],
+        ['query'],
+      ),
     'getAttributions' : IDL.Func(
         [],
         [IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Text))],
         ['query'],
       ),
+    'getBaseline' : IDL.Func([IDL.Nat], [BaselineResult], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
     'getMyClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
+    'getPriceHistory' : IDL.Func(
+        [IDL.Nat, IDL.Nat],
+        [IDL.Vec(PriceHistoryEntry)],
+        ['query'],
+      ),
     'getPrices' : IDL.Func(
         [],
         [IDL.Vec(IDL.Tuple(IDL.Nat, PriceEntry))],

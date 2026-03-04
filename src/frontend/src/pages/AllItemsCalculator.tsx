@@ -21,6 +21,7 @@ import type {
 import {
   calculateCraftingProfit,
   calculateGatheringProfit,
+  computeProfit24h,
 } from "@/lib/calculator/profitEngine";
 import type { CraftingProfitResult } from "@/lib/calculator/profitEngine";
 import type { ProfitResult } from "@/lib/calculator/types";
@@ -415,13 +416,15 @@ function TaggedProfitRow({
   return null;
 }
 
-// ─── Top 3 per Category · 24h Leaderboard ────────────────────────────────────
+// ─── Top 5 per Category · 24h Leaderboard ────────────────────────────────────
 
 interface Top5Item {
   name: string;
   category: Exclude<CategoryLabel, "Crafting">;
   profit24h: number;
   profitPerHour: number;
+  profitPerHarvest: number;
+  harvestTimeLabel: string;
 }
 
 type GatheringCategory = Exclude<CategoryLabel, "Crafting">;
@@ -454,14 +457,43 @@ const RANK_STYLES = [
     profit: "text-amber-500",
     card: "border-amber-700/20 bg-amber-700/5",
   },
+  // #4
+  {
+    badge: "bg-surface-2 text-muted-foreground border-border/50 font-medium",
+    profit: "text-muted-foreground",
+    card: "border-border/30 bg-surface-1",
+  },
+  // #5
+  {
+    badge: "bg-surface-2 text-muted-foreground border-border/50 font-medium",
+    profit: "text-muted-foreground",
+    card: "border-border/30 bg-surface-1",
+  },
 ];
 
 // ─── Rank badge tooltip text ──────────────────────────────────────────────────
 
-const RANK_LABEL = ["Best", "2nd", "3rd"] as const;
+const RANK_LABEL = ["Best", "2nd", "3rd", "4th", "5th"] as const;
 
-function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
+type LeaderboardMode = "24h" | "perHarvest";
+
+function Top5ByCatLeaderboard({ data }: { data: Top3ByCat }) {
+  const [mode, setMode] = useState<LeaderboardMode>("24h");
   const anyData = GATHERING_CATEGORIES.some((cat) => data[cat].length > 0);
+
+  // Sort items by selected mode
+  const sortedData = useMemo<Top3ByCat>(() => {
+    const result = {} as Top3ByCat;
+    for (const cat of GATHERING_CATEGORIES) {
+      const sorted = [...data[cat]].sort((a, b) =>
+        mode === "24h"
+          ? b.profit24h - a.profit24h
+          : b.profitPerHarvest - a.profitPerHarvest,
+      );
+      result[cat] = sorted;
+    }
+    return result;
+  }, [data, mode]);
 
   return (
     <div
@@ -472,11 +504,42 @@ function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <Trophy className="h-4 w-4 text-gold shrink-0" />
         <span className="text-sm font-semibold tracking-tight">
-          Top 3 per Category · 24h Window
+          Top 5 per Category
         </span>
+        {/* Mode toggle */}
+        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-surface-2 p-0.5">
+          <button
+            type="button"
+            data-ocid="all_items.top3.mode_24h_toggle"
+            onClick={() => setMode("24h")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all",
+              mode === "24h"
+                ? "bg-gold text-background shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            24h Window
+          </button>
+          <button
+            type="button"
+            data-ocid="all_items.top3.mode_harvest_toggle"
+            onClick={() => setMode("perHarvest")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all",
+              mode === "perHarvest"
+                ? "bg-gold text-background shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Per Harvest
+          </button>
+        </div>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Avoid flooding the market — diversify across categories
+        {mode === "24h"
+          ? "Ranked by total silver earned over 24h of continuous harvesting"
+          : "Ranked by profit from a single harvest — best lump-sum per cycle"}
       </p>
 
       {!anyData ? (
@@ -497,7 +560,7 @@ function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {GATHERING_CATEGORIES.map((cat) => {
-            const items = data[cat];
+            const items = sortedData[cat];
             return (
               <div key={cat} className="flex flex-col gap-2">
                 {/* Category header */}
@@ -517,6 +580,12 @@ function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
                 ) : (
                   items.map((item, idx) => {
                     const styles = RANK_STYLES[idx] ?? RANK_STYLES[2];
+                    const primaryValue =
+                      mode === "24h" ? item.profit24h : item.profitPerHarvest;
+                    const subLabel =
+                      mode === "24h"
+                        ? `${item.profitPerHour.toLocaleString(undefined, { maximumFractionDigits: 0 })}s/h`
+                        : item.harvestTimeLabel;
                     return (
                       <div
                         key={item.name}
@@ -545,7 +614,7 @@ function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
                           {item.name}
                         </div>
 
-                        {/* 24h profit */}
+                        {/* Primary value (24h or per-harvest) */}
                         <div
                           className={cn(
                             "font-num text-sm font-bold tabular-nums leading-none",
@@ -553,18 +622,15 @@ function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
                           )}
                         >
                           +
-                          {item.profit24h.toLocaleString(undefined, {
+                          {primaryValue.toLocaleString(undefined, {
                             maximumFractionDigits: 0,
                           })}
                           s
                         </div>
 
-                        {/* Sub-line: per hour */}
+                        {/* Sub-line */}
                         <div className="font-num text-[10px] text-muted-foreground tabular-nums">
-                          {item.profitPerHour.toLocaleString(undefined, {
-                            maximumFractionDigits: 0,
-                          })}
-                          s/h
+                          {subLabel}
                         </div>
                       </div>
                     );
@@ -591,7 +657,7 @@ export function AllItemsCalculator() {
   const { getPrice } = usePriceBookStore();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("profitPerHour");
+  const [sortBy, setSortBy] = useState<SortOption>("profit24h");
   const [minSkill, setMinSkill] = useState(1);
   const [maxSkill, setMaxSkill] = useState(100);
   const [showOnlyPositive, setShowOnlyPositive] = useState(false);
@@ -657,8 +723,13 @@ export function AllItemsCalculator() {
           marketFeePercent: config.marketFeePercent,
           getPrice,
         });
+        const profit24h = computeProfit24h(
+          gResult.profitPerHarvest,
+          tagged.item.growingTime,
+        );
         return {
           profit: gResult.profitPerHarvest,
+          profit24h,
           profitPerHour: gResult.profitPerHour,
           skillRequired: tagged.item.skillRequired,
           name: tagged.item.name,
@@ -674,6 +745,7 @@ export function AllItemsCalculator() {
       });
       return {
         profit: cResult.profit,
+        profit24h: 0 as number,
         profitPerHour: null as number | null,
         skillRequired: tagged.recipe.level,
         name: tagged.recipe.name,
@@ -697,7 +769,7 @@ export function AllItemsCalculator() {
       .map((r) => r.gatheringResult as ProfitResult);
   }, [allRowResults]);
 
-  // Top 3 per category by 24h profit (gathering only, priced items only)
+  // Top 3 per category — stores both 24h and per-harvest metrics
   const top3ByCat = useMemo<Top3ByCat>(() => {
     const buckets: Top3ByCat = {
       Farming: [],
@@ -714,18 +786,30 @@ export function AllItemsCalculator() {
       const result = meta.gatheringResult;
       if (!result || result.confidence === "low") continue;
 
+      // Format harvest time label (e.g. "2h 30m" or "45m")
+      const secs = meta.harvestTime;
+      const hrs = Math.floor(secs / 3600);
+      const mins = Math.floor((secs % 3600) / 60);
+      const harvestTimeLabel =
+        hrs > 0
+          ? `${hrs}h${mins > 0 ? ` ${mins}m` : ""} cycle`
+          : `${mins}m cycle`;
+
       const cat = (tagged as TaggedGatheringItem).category as GatheringCategory;
       buckets[cat].push({
         name: meta.name,
         category: cat,
-        profit24h: (meta.profitPerHour ?? 0) * 24,
+        profit24h: meta.profit24h,
         profitPerHour: meta.profitPerHour ?? 0,
+        profitPerHarvest: result.profitPerHarvest,
+        harvestTimeLabel,
       });
     }
 
+    // Default sort: by 24h (leaderboard sorts again based on toggle)
     for (const cat of GATHERING_CATEGORIES) {
       buckets[cat].sort((a, b) => b.profit24h - a.profit24h);
-      buckets[cat] = buckets[cat].slice(0, 3);
+      buckets[cat] = buckets[cat].slice(0, 5);
     }
 
     return buckets;
@@ -810,6 +894,8 @@ export function AllItemsCalculator() {
 
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case "profit24h":
+          return (b.meta.profit24h ?? 0) - (a.meta.profit24h ?? 0);
         case "profit":
           return b.meta.profit - a.meta.profit;
         case "profitPerHour":
@@ -909,8 +995,8 @@ export function AllItemsCalculator() {
       }
       results={
         <div className="space-y-2">
-          {/* Top 3 per Category · 24h Leaderboard */}
-          <Top3ByCatLeaderboard data={top3ByCat} />
+          {/* Top 5 per Category · 24h Leaderboard */}
+          <Top5ByCatLeaderboard data={top3ByCat} />
 
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -920,7 +1006,7 @@ export function AllItemsCalculator() {
                 ` of ${allTaggedItems.length}`}
             </p>
             <p className="text-xs text-muted-foreground">
-              Sorted by profit/hour · Expand a row to set prices
+              Sorted by profit/24h · Expand a row to set prices
             </p>
           </div>
 

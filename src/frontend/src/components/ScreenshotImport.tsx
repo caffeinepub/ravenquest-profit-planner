@@ -24,6 +24,7 @@ import type { CropRect } from "@/lib/imagePreprocess";
 import { preprocessImage } from "@/lib/imagePreprocess";
 import { extractOcrRows } from "@/lib/ocrPriceExtractor";
 import { usePriceBookStore } from "@/lib/priceBook/store";
+import { usePriceHistoryStore } from "@/lib/priceHistory/store";
 import { useSnapshotStore } from "@/lib/snapshots/store";
 import { cn } from "@/lib/utils";
 import {
@@ -114,6 +115,7 @@ export function ScreenshotImport({
 }: ScreenshotImportProps) {
   const { setPrice } = usePriceBookStore();
   const { saveSnapshot } = useSnapshotStore();
+  const { addRecords: addPriceHistoryRecords } = usePriceHistoryStore();
 
   const [open, setOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -296,9 +298,21 @@ export function ScreenshotImport({
       return;
     }
 
+    const nowTs = Date.now();
+    const appliedHistory: Array<{
+      itemId: number;
+      itemName: string;
+      price: number;
+    }> = [];
+
     for (const row of toApply) {
       if (row.matchedId !== null) {
         setPrice(row.matchedId, row.matchedName, row.editedPrice);
+        appliedHistory.push({
+          itemId: row.matchedId,
+          itemName: row.matchedName,
+          price: row.editedPrice,
+        });
       } else {
         // Try to re-match with the possibly-edited name
         const match = findBestMatchStrict(
@@ -308,8 +322,27 @@ export function ScreenshotImport({
         );
         if (match) {
           setPrice(match.id, match.name, row.editedPrice);
+          appliedHistory.push({
+            itemId: match.id,
+            itemName: match.name,
+            price: row.editedPrice,
+          });
         }
       }
+    }
+
+    // Record price history for screenshot updates
+    if (appliedHistory.length > 0) {
+      addPriceHistoryRecords(
+        appliedHistory.map((item) => ({
+          itemId: item.itemId,
+          itemName: item.itemName,
+          price: item.price,
+          timestamp: nowTs,
+          source: "screenshot" as const,
+          updatedBy: "screenshot",
+        })),
+      );
     }
 
     const label = new Date().toLocaleString(undefined, {

@@ -1,5 +1,4 @@
 import { AISummaryPanel } from "@/components/AISummaryPanel";
-import { ChatPriceInput } from "@/components/ChatPriceInput";
 import { MarketFloodWarning } from "@/components/MarketFloodWarning";
 import { ScreenshotImport } from "@/components/ScreenshotImport";
 import { SnapshotPanel } from "@/components/SnapshotPanel";
@@ -35,7 +34,10 @@ import {
   getBandForItem,
   husbandryToGathering,
 } from "@/lib/calculator/growTimeBands";
-import { calculateGatheringProfit } from "@/lib/calculator/profitEngine";
+import {
+  calculateGatheringProfit,
+  computeProfit24h,
+} from "@/lib/calculator/profitEngine";
 import {
   type LandSlot,
   type LandType,
@@ -50,6 +52,7 @@ import { useConfigStore } from "@/store/configStore";
 import {
   AlertCircle,
   ChevronDown,
+  Clock,
   HelpCircle,
   Loader2,
   Plus,
@@ -351,6 +354,7 @@ interface BandCardProps {
   stats: BandStats;
   isBest: boolean;
   isPreferred: boolean;
+  isSelectedWindow?: boolean;
 }
 
 const BAND_KEY_TO_OCID: Record<BandKey, string> = {
@@ -361,7 +365,12 @@ const BAND_KEY_TO_OCID: Record<BandKey, string> = {
   AWAY: "strategy.band_card.away",
 };
 
-function BandCard({ stats, isBest, isPreferred }: BandCardProps) {
+function BandCard({
+  stats,
+  isBest,
+  isPreferred,
+  isSelectedWindow,
+}: BandCardProps) {
   const { band, avgSilverPerHour, topSilverPerHour, totalPotentialSilver } =
     stats;
   const color = band.color;
@@ -369,15 +378,19 @@ function BandCard({ stats, isBest, isPreferred }: BandCardProps) {
 
   const borderClass = isBest
     ? "border-gold/60 shadow-gold-glow"
-    : isPreferred
-      ? BAND_HIGHLIGHT_BORDER[color]
-      : "border-border";
+    : isSelectedWindow
+      ? "border-amber-400/70 shadow-[0_0_16px_rgba(251,191,36,0.15)]"
+      : isPreferred
+        ? BAND_HIGHLIGHT_BORDER[color]
+        : "border-border";
 
   const bgClass = isBest
     ? "bg-gold/5"
-    : isPreferred
-      ? BAND_BG[color]
-      : "bg-surface-1";
+    : isSelectedWindow
+      ? "bg-amber-500/5"
+      : isPreferred
+        ? BAND_BG[color]
+        : "bg-surface-1";
 
   return (
     <div
@@ -407,7 +420,13 @@ function BandCard({ stats, isBest, isPreferred }: BandCardProps) {
               BEST
             </span>
           )}
-          {isPreferred && (
+          {isSelectedWindow && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300 border border-amber-500/40">
+              <Zap className="h-3 w-3" />
+              Selected Window
+            </span>
+          )}
+          {isPreferred && !isSelectedWindow && (
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold border",
@@ -496,6 +515,302 @@ function BandCard({ stats, isBest, isPreferred }: BandCardProps) {
         </p>
       </div>
     </div>
+  );
+}
+
+// ─── Time-window to band mapping ──────────────────────────────────────────────
+
+const TIME_WINDOW_OPTIONS = [2, 6, 8, 12, 16, 24] as const;
+
+function getWindowTolerance(windowHours: number): {
+  minHours: number;
+  maxHours: number;
+} {
+  if (windowHours === 2) return { minHours: 1, maxHours: 2 };
+  if (windowHours === 6) return { minHours: 4, maxHours: 6 };
+  if (windowHours === 8) return { minHours: 6, maxHours: 8 };
+  if (windowHours === 12) return { minHours: 8, maxHours: 12 };
+  if (windowHours === 16) return { minHours: 12, maxHours: 16 };
+  if (windowHours === 24) return { minHours: 16, maxHours: 24 };
+  // Custom: ±20%
+  return {
+    minHours: windowHours * 0.8,
+    maxHours: windowHours * 1.2,
+  };
+}
+
+function getWindowBandKey(windowHours: number): BandKey {
+  if (windowHours <= 2) return "FAST";
+  if (windowHours <= 6) return "ACTIVE";
+  if (windowHours <= 8) return "MID";
+  if (windowHours <= 16) return "SLEEP";
+  return "AWAY";
+}
+
+// ─── Grow Time Window Dropdown ────────────────────────────────────────────────
+
+interface GrowTimeWindowDropdownProps {
+  value: number | null;
+  onChange: (hours: number | null) => void;
+}
+
+function GrowTimeWindowDropdown({
+  value,
+  onChange,
+}: GrowTimeWindowDropdownProps) {
+  const [customInput, setCustomInput] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+
+  const handleSelectChange = (v: string) => {
+    if (v === "all") {
+      setShowCustom(false);
+      onChange(null);
+    } else if (v === "custom") {
+      setShowCustom(true);
+    } else {
+      setShowCustom(false);
+      onChange(Number(v));
+    }
+  };
+
+  const handleCustomApply = () => {
+    const parsed = Number.parseFloat(customInput);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      onChange(parsed);
+    }
+  };
+
+  const selectValue =
+    value === null
+      ? "all"
+      : showCustom
+        ? "custom"
+        : TIME_WINDOW_OPTIONS.includes(
+              value as (typeof TIME_WINDOW_OPTIONS)[number],
+            )
+          ? value.toString()
+          : "custom";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Best For Time Window
+      </span>
+      <div className="flex items-center gap-1.5">
+        <Select value={selectValue} onValueChange={handleSelectChange}>
+          <SelectTrigger
+            data-ocid="strategy.time_window.select"
+            className="h-9 w-[160px] bg-surface-2 border-border text-sm"
+          >
+            <SelectValue placeholder="All windows" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All windows</SelectItem>
+            {TIME_WINDOW_OPTIONS.map((h) => (
+              <SelectItem key={h} value={h.toString()}>
+                {h}h window
+              </SelectItem>
+            ))}
+            <SelectItem value="custom">Custom…</SelectItem>
+          </SelectContent>
+        </Select>
+        {showCustom && (
+          <div className="flex items-center gap-1">
+            <Input
+              data-ocid="strategy.time_window.custom_input"
+              type="number"
+              min="0.5"
+              step="0.5"
+              placeholder="Hours"
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCustomApply();
+              }}
+              className="h-9 w-20 bg-surface-2 border-border text-sm font-mono text-center"
+            />
+            <button
+              type="button"
+              data-ocid="strategy.time_window.custom_apply_button"
+              onClick={handleCustomApply}
+              className="h-9 rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors"
+            >
+              Apply
+            </button>
+          </div>
+        )}
+        {value !== null && (
+          <button
+            type="button"
+            data-ocid="strategy.time_window.clear_button"
+            onClick={() => {
+              setShowCustom(false);
+              setCustomInput("");
+              onChange(null);
+            }}
+            className="h-9 rounded-lg border border-border bg-surface-2 px-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {value !== null && (
+        <p className="text-[11px] text-amber-400/80">
+          Showing items with {getWindowTolerance(value).minHours.toFixed(1)}h–
+          {getWindowTolerance(value).maxHours.toFixed(1)}h grow time
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Top 5 Items For Selected Window ─────────────────────────────────────────
+
+interface Top5WindowItem {
+  name: string;
+  category: string;
+  growHours: number;
+  profit24h: number;
+  profitPerHarvest: number;
+  profitPerHour: number;
+}
+
+interface Top5ForWindowProps {
+  windowHours: number;
+  items: GatheringItem[];
+  config: {
+    landMultiplier: number;
+    marketFeePercent: number;
+    getPrice: (id: number) => number | null;
+  };
+}
+
+function Top5ForWindow({ windowHours, items, config }: Top5ForWindowProps) {
+  const { minHours, maxHours } = getWindowTolerance(windowHours);
+
+  const ranked = useMemo<Top5WindowItem[]>(() => {
+    const results: Top5WindowItem[] = [];
+    for (const item of items) {
+      const growHours = item.growingTime / 3600;
+      if (growHours < minHours || growHours > maxHours) continue;
+      const result = calculateGatheringProfit(item, 1, config);
+      if (result.confidence === "low") continue;
+      const profit24h = computeProfit24h(
+        result.profitPerHarvest,
+        item.growingTime,
+      );
+      if (profit24h <= 0) continue;
+      results.push({
+        name: item.name,
+        category: item.category ?? "Gathering",
+        growHours,
+        profit24h,
+        profitPerHarvest: result.profitPerHarvest,
+        profitPerHour: result.profitPerHour ?? 0,
+      });
+    }
+    return results.sort((a, b) => b.profit24h - a.profit24h).slice(0, 5);
+  }, [items, minHours, maxHours, config]);
+
+  const fmtS = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  };
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    Farming: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    Herbalism: "bg-lime-500/15 text-lime-400 border-lime-500/30",
+    Woodcutting: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    Husbandry: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  };
+
+  return (
+    <section
+      data-ocid="strategy.top5_window.section"
+      className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden"
+    >
+      <div className="border-b border-amber-500/20 px-4 py-3 flex items-center gap-2">
+        <Zap className="h-4 w-4 text-amber-400 shrink-0" />
+        <div>
+          <h3 className="text-sm font-bold text-foreground">
+            Top 5 (24h profit) for {windowHours}h window
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Items with {minHours.toFixed(minHours % 1 === 0 ? 0 : 1)}h–
+            {maxHours.toFixed(maxHours % 1 === 0 ? 0 : 1)}h grow time · ranked
+            by profit/24h
+          </p>
+        </div>
+      </div>
+
+      {ranked.length === 0 ? (
+        <div
+          data-ocid="strategy.top5_window.empty_state"
+          className="px-4 py-8 text-center"
+        >
+          <p className="text-sm text-muted-foreground">
+            No priced items found in this time window.
+          </p>
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Set prices in the Price Book to see results here.
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-border/20">
+          {ranked.map((item, idx) => (
+            <div
+              key={item.name}
+              data-ocid={`strategy.top5_window.item.${idx + 1}`}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2/40 transition-colors"
+            >
+              {/* Rank */}
+              <span className="font-mono text-xs text-muted-foreground/50 w-5 shrink-0 text-right">
+                {idx + 1}.
+              </span>
+
+              {/* Name + Category */}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-sm truncate">
+                    {item.name}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded border px-1.5 py-0 text-[10px] font-medium",
+                      CATEGORY_COLORS[item.category] ??
+                        "bg-surface-2 text-muted-foreground border-border",
+                    )}
+                  >
+                    {item.category}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-0.5">
+                    <Clock className="h-3 w-3" />
+                    {item.growHours % 1 === 0
+                      ? `${item.growHours}h`
+                      : `${item.growHours.toFixed(1)}h`}
+                  </span>
+                  <span className="opacity-50">·</span>
+                  <span>{fmtS(item.profitPerHour)}s/h</span>
+                </div>
+              </div>
+
+              {/* Profit metrics */}
+              <div className="shrink-0 text-right">
+                <div className="font-mono text-sm font-bold tabular-nums text-gold">
+                  +{fmtS(item.profit24h)}s/24h
+                </div>
+                <div className="font-mono text-xs text-muted-foreground tabular-nums">
+                  +{fmtS(item.profitPerHarvest)}s/harvest
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -904,6 +1219,11 @@ export function GrowTimeStrategy() {
   const rowCap = config.rowCap;
   const setRowCap = config.setRowCap;
 
+  // Time window filter state (null = show all)
+  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number | null>(
+    null,
+  );
+
   const isLoading =
     farming.isLoading ||
     herbalism.isLoading ||
@@ -1075,6 +1395,11 @@ export function GrowTimeStrategy() {
               currentSize={config.landSize}
               onSelect={(size) => config.setLandSize(size)}
             />
+            <div className="h-8 w-px bg-border/60 hidden sm:block self-end mb-1" />
+            <GrowTimeWindowDropdown
+              value={selectedTimeWindow}
+              onChange={setSelectedTimeWindow}
+            />
             {/* Current config summary */}
             <div className="ml-auto flex flex-col items-end gap-1 self-end">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1113,10 +1438,15 @@ export function GrowTimeStrategy() {
 
         {/* Profit Dashboard */}
         <section>
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <div>
               <h2 className="font-display text-lg font-bold text-foreground">
                 Best Farming Time Window
+                {selectedTimeWindow !== null && (
+                  <span className="ml-2 text-sm font-normal text-amber-400">
+                    · Filtered for {selectedTimeWindow}h window
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Profitability by grow-time band · based on your Price Book
@@ -1127,14 +1457,20 @@ export function GrowTimeStrategy() {
 
           {/* Band Cards Grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {bandStats.map((stats) => (
-              <BandCard
-                key={stats.band.key}
-                stats={stats}
-                isBest={bestBand?.band.key === stats.band.key}
-                isPreferred={stats.band.key === preferredBandKey}
-              />
-            ))}
+            {bandStats.map((stats) => {
+              const isSelectedWindow =
+                selectedTimeWindow !== null &&
+                stats.band.key === getWindowBandKey(selectedTimeWindow);
+              return (
+                <BandCard
+                  key={stats.band.key}
+                  stats={stats}
+                  isBest={bestBand?.band.key === stats.band.key}
+                  isPreferred={stats.band.key === preferredBandKey}
+                  isSelectedWindow={isSelectedWindow}
+                />
+              );
+            })}
           </div>
 
           {/* No data at all */}
@@ -1155,6 +1491,19 @@ export function GrowTimeStrategy() {
             </div>
           )}
         </section>
+
+        {/* Top 5 for selected time window */}
+        {selectedTimeWindow !== null && (
+          <Top5ForWindow
+            windowHours={selectedTimeWindow}
+            items={allGatheringItems}
+            config={{
+              landMultiplier: config.landMultiplier,
+              marketFeePercent: config.marketFeePercent,
+              getPrice,
+            }}
+          />
+        )}
 
         {/* Comparison table: all bands side-by-side */}
         {bandStats.some((b) => b.hasData) && (
@@ -1309,13 +1658,7 @@ export function GrowTimeStrategy() {
           <h3 className="mb-3 font-display text-base font-bold text-foreground">
             Price Update Tools
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ChatPriceInput knownItems={allKnownItems} bandStats={bandStats} />
-            <ScreenshotImport
-              knownItems={allKnownItems}
-              bandStats={bandStats}
-            />
-          </div>
+          <ScreenshotImport knownItems={allKnownItems} bandStats={bandStats} />
         </section>
 
         {/* ── Snapshot Panel ──────────────────────────────────────────────── */}

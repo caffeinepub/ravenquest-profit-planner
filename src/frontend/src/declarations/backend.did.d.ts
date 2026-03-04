@@ -10,6 +10,12 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface BaselineResult {
+  'method' : string,
+  'baseline' : number,
+  'volatility' : number,
+  'dataPoints' : bigint,
+}
 export interface GrowingClaim {
   'itemId' : bigint,
   'claimedAt' : bigint,
@@ -26,21 +32,40 @@ export interface PriceEntry {
   'itemName' : string,
   'price' : number,
 }
+export interface PriceHistoryEntry {
+  'itemId' : bigint,
+  'source' : string,
+  'updatedBy' : string,
+  'timestamp' : bigint,
+  'itemName' : string,
+  'price' : number,
+}
+export interface PriceHistoryInput {
+  'itemId' : bigint,
+  'source' : string,
+  'updatedBy' : string,
+  'itemName' : string,
+  'price' : number,
+}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'addPriceHistory' : ActorMethod<[Array<PriceHistoryInput>], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'clearAll' : ActorMethod<[], undefined>,
   'clearPrice' : ActorMethod<[bigint], undefined>,
   'getAdminPrincipal' : ActorMethod<[], [] | [Principal]>,
+  'getAllPriceHistory' : ActorMethod<[bigint], Array<PriceHistoryEntry>>,
   'getAttributions' : ActorMethod<[], Array<[bigint, string]>>,
+  'getBaseline' : ActorMethod<[bigint], BaselineResult>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getClaims' : ActorMethod<[], Array<GrowingClaim>>,
   'getMyClaims' : ActorMethod<[], Array<GrowingClaim>>,
+  'getPriceHistory' : ActorMethod<[bigint, bigint], Array<PriceHistoryEntry>>,
   'getPrices' : ActorMethod<[], Array<[bigint, PriceEntry]>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,

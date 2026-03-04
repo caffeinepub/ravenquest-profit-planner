@@ -1,12 +1,14 @@
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
+import Int "mo:core/Int";
 import Text "mo:core/Text";
 import Map "mo:core/Map";
 import Time "mo:core/Time";
-import Int "mo:core/Int";
+import Float "mo:core/Float";
 import Array "mo:core/Array";
-import Runtime "mo:core/Runtime";
+import List "mo:core/List";
 import Iter "mo:core/Iter";
+import Runtime "mo:core/Runtime";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
@@ -40,9 +42,34 @@ actor {
     claimedBy : Principal;
   };
 
+  public type PriceHistoryEntry = {
+    itemId : Nat;
+    itemName : Text;
+    price : Float;
+    timestamp : Int;
+    source : Text;
+    updatedBy : Text;
+  };
+
+  public type PriceHistoryInput = {
+    itemId : Nat;
+    itemName : Text;
+    price : Float;
+    source : Text;
+    updatedBy : Text;
+  };
+
+  public type BaselineResult = {
+    baseline : Float;
+    volatility : Float;
+    method : Text;
+    dataPoints : Nat;
+  };
+
   let priceBook = Map.empty<Nat, PriceEntry>();
   let claims = Map.empty<InternalCompositeKey, GrowingClaim>();
   let userProfiles = Map.empty<Principal, UserProfile>();
+  var priceHistory = List.empty<PriceHistoryEntry>();
 
   func makeCompositeKey(principal : Principal, itemId : Nat) : Text {
     principal.toText() # ":" # itemId.toText();
@@ -170,15 +197,138 @@ actor {
     );
   };
 
-  // USER AUTH/ADMIN QUERY
-  // Note: This function cannot be fully implemented as specified because
-  // AccessControlState is an opaque type with no public API to iterate user roles.
-  // The AccessControl module would need to expose a getUserRoles() method.
-  // For now, this returns null as we cannot access the internal state.
+  // Price History functions
+  public shared ({ caller }) func addPriceHistory(entries : [PriceHistoryInput]) : async () {
+    let currentTime = Time.now() / 1_000_000;
+
+    // Create new entries
+    let newEntries = entries.map(
+      func(input) {
+        let updatedBy = if (input.updatedBy.size() > 0) {
+          input.updatedBy;
+        } else {
+          caller.toText();
+        };
+        {
+          itemId = input.itemId;
+          itemName = input.itemName;
+          price = input.price;
+          timestamp = currentTime;
+          source = input.source;
+          updatedBy;
+        };
+      }
+    );
+
+    let newEntriesList = List.fromArray<PriceHistoryEntry>(newEntries);
+    priceHistory.addAll(newEntriesList.values());
+
+    // Trim to 2000 entries if needed
+    let historySize = priceHistory.size();
+    if (historySize > 2000) {
+      let historyArray = priceHistory.toArray();
+      let trimmedArray = historyArray.sliceToArray(0, 2000);
+      priceHistory := List.fromArray<PriceHistoryEntry>(trimmedArray);
+    };
+  };
+
+  public query ({ caller }) func getPriceHistory(itemId : Nat, limit : Nat) : async [PriceHistoryEntry] {
+    let filtered = priceHistory.toArray().filter(
+      func(entry) {
+        entry.itemId == itemId;
+      }
+    );
+
+    let limited = if (limit > 0 and filtered.size() > limit) {
+      filtered.sliceToArray(0, limit);
+    } else {
+      filtered;
+    };
+
+    limited;
+  };
+
+  public query ({ caller }) func getAllPriceHistory(limit : Nat) : async [PriceHistoryEntry] {
+    let historyArray = priceHistory.toArray();
+
+    let limited = if (limit > 0 and historyArray.size() > limit) {
+      historyArray.sliceToArray(0, limit);
+    } else {
+      historyArray;
+    };
+
+    limited;
+  };
+
+  public shared ({ caller }) func getBaseline(itemId : Nat) : async BaselineResult {
+    let nowMs = Time.now() / 1_000_000;
+    let dayMs = 24 * 3600 * 1000;
+    let sevenDaysMs = 7 * dayMs;
+
+    let entries : [PriceHistoryEntry] = priceHistory.toArray().filter(
+      func(entry) {
+        entry.itemId == itemId;
+      }
+    );
+
+    let window7Days = entries.filter(
+      func(entry) {
+        (nowMs - entry.timestamp) <= sevenDaysMs
+      }
+    );
+
+    if (window7Days.size() >= 3) {
+      return computeStats(window7Days, "7d_rolling_avg");
+    } else if (entries.size() >= 3) {
+      let endIndex = if (entries.size() >= 30) { 30 } else { entries.size() };
+      let last30Entries = entries.sliceToArray(0, endIndex);
+      if (last30Entries.size() >= 3) {
+        return computeStats(last30Entries, "last_30_avg");
+      };
+    };
+
+    if (entries.size() >= 1) {
+      let endIndex = if (entries.size() >= 10) { 10 } else { entries.size() };
+      let last10Entries = entries.sliceToArray(0, endIndex);
+      if (last10Entries.size() >= 1) {
+        return computeStats(last10Entries, "last_10_avg");
+      };
+    };
+
+    { baseline = 0.0; volatility = 0.0; method = "none"; dataPoints = 0 };
+  };
+
+  func computeStats(entries : [PriceHistoryEntry], method : Text) : BaselineResult {
+    let n = entries.size();
+    if (n == 0) {
+      return { baseline = 0.0; volatility = 0.0; method = "none"; dataPoints = 0 };
+    };
+
+    var sum = 0.0;
+    for (entry in entries.values()) {
+      sum += entry.price;
+    };
+
+    let mean = sum / n.toFloat();
+
+    if (n == 1) {
+      return { baseline = mean; volatility = 0.0; method; dataPoints = n };
+    };
+
+    var sumSquares = 0.0;
+    for (entry in entries.values()) {
+      let diff = entry.price - mean;
+      sumSquares += diff * diff;
+    };
+
+    let variance = sumSquares / (n.toFloat() - 1);
+    let stddev = Float.sqrt(variance);
+
+    { baseline = mean; volatility = stddev; method; dataPoints = n };
+  };
+
+  // ADMIN QUERY (Updated)
   public query ({ caller }) func getAdminPrincipal() : async ?Principal {
-    // Cannot iterate accessControlState as it's opaque and has no public iteration API
-    // This would require AccessControl module to expose a method like:
-    // public func getAllUserRoles(state: AccessControlState) : [(Principal, UserRole)]
     null;
   };
 };

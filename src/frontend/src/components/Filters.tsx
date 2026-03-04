@@ -12,7 +12,12 @@ import { Switch } from "@/components/ui/switch";
 import { Search } from "lucide-react";
 import { useState } from "react";
 
-export type SortOption = "profit" | "profitPerHour" | "skill" | "name";
+export type SortOption =
+  | "profit"
+  | "profitPerHour"
+  | "profit24h"
+  | "skill"
+  | "name";
 
 interface FiltersProps {
   searchTerm: string;
@@ -93,6 +98,7 @@ export function Filters({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="profit24h">Profit / 24h</SelectItem>
             <SelectItem value="profit">Profit per Harvest</SelectItem>
             <SelectItem value="profitPerHour">Profit per Hour</SelectItem>
             <SelectItem value="skill">Skill Level</SelectItem>
