@@ -29,7 +29,10 @@ export function CalculatorLayout({
 
         {/* Right: Summary */}
         <aside className="hidden w-60 shrink-0 xl:block">
-          <div className="sticky top-[108px] rounded-xl border border-border bg-surface-1 p-4 shadow-card">
+          <div
+            className="sticky top-[108px] rounded-xl border border-border bg-surface-1 p-4 shadow-card overflow-y-auto"
+            style={{ maxHeight: "calc(100vh - 120px)" }}
+          >
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Summary
             </h2>

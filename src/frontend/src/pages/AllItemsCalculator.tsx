@@ -415,7 +415,7 @@ function TaggedProfitRow({
   return null;
 }
 
-// ─── Top 5 · 24h Leaderboard ──────────────────────────────────────────────────
+// ─── Top 3 per Category · 24h Leaderboard ────────────────────────────────────
 
 interface Top5Item {
   name: string;
@@ -424,11 +424,22 @@ interface Top5Item {
   profitPerHour: number;
 }
 
+type GatheringCategory = Exclude<CategoryLabel, "Crafting">;
+
+type Top3ByCat = Record<GatheringCategory, Top5Item[]>;
+
+const GATHERING_CATEGORIES: GatheringCategory[] = [
+  "Farming",
+  "Herbalism",
+  "Woodcutting",
+  "Husbandry",
+];
+
 const RANK_STYLES = [
   // #1 gold
   {
     badge: "bg-gold/20 text-gold border-gold/40 font-bold",
-    profit: "text-gold glow-gold",
+    profit: "text-gold",
     card: "border-gold/30 bg-gold/5",
   },
   // #2 silver
@@ -443,38 +454,32 @@ const RANK_STYLES = [
     profit: "text-amber-500",
     card: "border-amber-700/20 bg-amber-700/5",
   },
-  // #4 muted
-  {
-    badge: "bg-surface-3 text-muted-foreground border-border",
-    profit: "text-muted-foreground",
-    card: "border-border bg-surface-1",
-  },
-  // #5 muted
-  {
-    badge: "bg-surface-3 text-muted-foreground border-border",
-    profit: "text-muted-foreground",
-    card: "border-border bg-surface-1",
-  },
 ];
 
-function Top5Leaderboard({ items }: { items: Top5Item[] }) {
+// ─── Rank badge tooltip text ──────────────────────────────────────────────────
+
+const RANK_LABEL = ["Best", "2nd", "3rd"] as const;
+
+function Top3ByCatLeaderboard({ data }: { data: Top3ByCat }) {
+  const anyData = GATHERING_CATEGORIES.some((cat) => data[cat].length > 0);
+
   return (
     <div
-      data-ocid="all_items.panel"
+      data-ocid="all_items.top3_panel"
       className="mb-4 rounded-xl border border-border bg-surface-1 px-4 py-3"
     >
       {/* Header */}
-      <div className="mb-3 flex items-center gap-2">
-        <Trophy className="h-4 w-4 text-gold" />
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <Trophy className="h-4 w-4 text-gold shrink-0" />
         <span className="text-sm font-semibold tracking-tight">
-          Top 5 · 24h Window
-        </span>
-        <span className="ml-1 text-xs text-muted-foreground">
-          gathering only · most profitable per 24 hours
+          Top 3 per Category · 24h Window
         </span>
       </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Avoid flooding the market — diversify across categories
+      </p>
 
-      {items.length === 0 ? (
+      {!anyData ? (
         <div
           data-ocid="all_items.empty_state"
           className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-surface-2/40 py-6 text-center"
@@ -490,65 +495,81 @@ function Top5Leaderboard({ items }: { items: Top5Item[] }) {
           </div>
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-          {items.map((item, idx) => {
-            const styles = RANK_STYLES[idx] ?? RANK_STYLES[4];
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {GATHERING_CATEGORIES.map((cat) => {
+            const items = data[cat];
             return (
-              <div
-                key={item.name}
-                data-ocid={`all_items.item.${idx + 1}`}
-                className={cn(
-                  "flex w-40 shrink-0 flex-col gap-1.5 rounded-lg border p-3 transition-colors",
-                  styles.card,
+              <div key={cat} className="flex flex-col gap-2">
+                {/* Category header */}
+                <Badge
+                  variant="outline"
+                  className={`w-fit border px-2 py-0.5 text-[11px] font-semibold ${CATEGORY_COLORS[cat]}`}
+                >
+                  {cat}
+                </Badge>
+
+                {items.length === 0 ? (
+                  <div className="flex items-center justify-center rounded-lg border border-dashed border-border/50 bg-surface-2/30 px-3 py-4 text-center">
+                    <p className="text-[11px] text-muted-foreground/70">
+                      Set prices to unlock
+                    </p>
+                  </div>
+                ) : (
+                  items.map((item, idx) => {
+                    const styles = RANK_STYLES[idx] ?? RANK_STYLES[2];
+                    return (
+                      <div
+                        key={item.name}
+                        data-ocid={`all_items.top3.${cat.toLowerCase()}.item.${idx + 1}`}
+                        className={cn(
+                          "flex flex-col gap-1.5 rounded-lg border p-2.5 transition-colors",
+                          styles.card,
+                        )}
+                        title={`${RANK_LABEL[idx]} in ${cat}`}
+                      >
+                        {/* Rank badge */}
+                        <span
+                          className={cn(
+                            "inline-flex h-5 w-8 items-center justify-center self-start rounded border text-[11px]",
+                            styles.badge,
+                          )}
+                        >
+                          #{idx + 1}
+                        </span>
+
+                        {/* Item name */}
+                        <div
+                          className="truncate text-xs font-semibold leading-snug"
+                          title={item.name}
+                        >
+                          {item.name}
+                        </div>
+
+                        {/* 24h profit */}
+                        <div
+                          className={cn(
+                            "font-num text-sm font-bold tabular-nums leading-none",
+                            styles.profit,
+                          )}
+                        >
+                          +
+                          {item.profit24h.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                          s
+                        </div>
+
+                        {/* Sub-line: per hour */}
+                        <div className="font-num text-[10px] text-muted-foreground tabular-nums">
+                          {item.profitPerHour.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                          s/h
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
-              >
-                {/* Rank + Category row */}
-                <div className="flex items-center justify-between gap-1">
-                  <span
-                    className={cn(
-                      "inline-flex h-5 w-7 items-center justify-center rounded border text-[11px]",
-                      styles.badge,
-                    )}
-                  >
-                    #{idx + 1}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className={`border px-1 py-0 text-[9px] font-medium ${CATEGORY_COLORS[item.category]}`}
-                  >
-                    {item.category}
-                  </Badge>
-                </div>
-
-                {/* Item name */}
-                <div
-                  className="truncate text-xs font-semibold leading-tight"
-                  title={item.name}
-                >
-                  {item.name}
-                </div>
-
-                {/* 24h profit */}
-                <div
-                  className={cn(
-                    "font-num text-base font-bold tabular-nums leading-none",
-                    styles.profit,
-                  )}
-                >
-                  +
-                  {item.profit24h.toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}
-                  s
-                </div>
-
-                {/* Sub-line: per hour */}
-                <div className="font-num text-[10px] text-muted-foreground tabular-nums">
-                  {item.profitPerHour.toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}
-                  s/h
-                </div>
               </div>
             );
           })}
@@ -676,30 +697,48 @@ export function AllItemsCalculator() {
       .map((r) => r.gatheringResult as ProfitResult);
   }, [allRowResults]);
 
-  // Top 5 items by 24h profit (gathering only, priced items only)
-  const top5_24h = useMemo<Top5Item[]>(() => {
-    const candidates = allTaggedItems
-      .map((tagged, i) => ({ tagged, meta: allRowResults[i] }))
-      .filter(({ tagged, meta }) => {
-        if (tagged.kind === "crafting") return false;
-        if (meta.profitPerHour === null || meta.profitPerHour <= 0)
-          return false;
-        const result = meta.gatheringResult;
-        if (!result || result.confidence === "low") return false;
-        return true;
-      })
-      .map(({ tagged, meta }) => ({
+  // Top 3 per category by 24h profit (gathering only, priced items only)
+  const top3ByCat = useMemo<Top3ByCat>(() => {
+    const buckets: Top3ByCat = {
+      Farming: [],
+      Herbalism: [],
+      Woodcutting: [],
+      Husbandry: [],
+    };
+
+    for (let i = 0; i < allTaggedItems.length; i++) {
+      const tagged = allTaggedItems[i];
+      const meta = allRowResults[i];
+      if (tagged.kind === "crafting") continue;
+      if (meta.profitPerHour === null || meta.profitPerHour <= 0) continue;
+      const result = meta.gatheringResult;
+      if (!result || result.confidence === "low") continue;
+
+      const cat = (tagged as TaggedGatheringItem).category as GatheringCategory;
+      buckets[cat].push({
         name: meta.name,
-        category: (tagged as TaggedGatheringItem).category as Exclude<
-          CategoryLabel,
-          "Crafting"
-        >,
+        category: cat,
         profit24h: (meta.profitPerHour ?? 0) * 24,
         profitPerHour: meta.profitPerHour ?? 0,
-      }));
-    candidates.sort((a, b) => b.profit24h - a.profit24h);
-    return candidates.slice(0, 5);
+      });
+    }
+
+    for (const cat of GATHERING_CATEGORIES) {
+      buckets[cat].sort((a, b) => b.profit24h - a.profit24h);
+      buckets[cat] = buckets[cat].slice(0, 3);
+    }
+
+    return buckets;
   }, [allTaggedItems, allRowResults]);
+
+  // Overall best 24h item (across all categories) for SummaryPanel
+  const overallBest24h = useMemo<Top5Item | null>(() => {
+    const allTop = GATHERING_CATEGORIES.flatMap((cat) => top3ByCat[cat]);
+    if (allTop.length === 0) return null;
+    return allTop.reduce((best, x) =>
+      x.profit24h > best.profit24h ? x : best,
+    );
+  }, [top3ByCat]);
 
   // Best item per time window (gathering only)
   const TIME_WINDOWS = [2, 4, 6, 8, 12, 24];
@@ -870,8 +909,8 @@ export function AllItemsCalculator() {
       }
       results={
         <div className="space-y-2">
-          {/* Top 5 · 24h Leaderboard */}
-          <Top5Leaderboard items={top5_24h} />
+          {/* Top 3 per Category · 24h Leaderboard */}
+          <Top3ByCatLeaderboard data={top3ByCat} />
 
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -928,7 +967,7 @@ export function AllItemsCalculator() {
             return true;
           })}
           totalItems={allTaggedItems.length}
-          top24hItem={top5_24h[0] ?? null}
+          top24hItem={overallBest24h}
           bestByWindow={bestByWindow}
         />
       }

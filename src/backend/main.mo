@@ -9,9 +9,9 @@ import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   type InternalCompositeKey = Text;
 

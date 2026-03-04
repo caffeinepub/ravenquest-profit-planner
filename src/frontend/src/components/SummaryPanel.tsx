@@ -1,11 +1,18 @@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ProfitResult } from "@/lib/calculator/types";
 import {
   Award,
   BarChart3,
   Clock,
   Database,
+  Info,
   TrendingUp,
   Trophy,
 } from "lucide-react";
@@ -131,9 +138,35 @@ export function SummaryPanel({
           <div className="flex items-start gap-2">
             <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Best 24h Earner
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="inline-flex cursor-help items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Best 24h Earner
+                      <Info className="ml-1 inline h-3 w-3 cursor-help text-muted-foreground/60" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="left"
+                    className="max-w-xs text-xs"
+                    data-ocid="summary.best24h.tooltip"
+                  >
+                    <p className="mb-1 font-semibold">Best 24h Earner</p>
+                    <p className="mb-2 text-muted-foreground">
+                      The gathering item that earns the most silver if harvested
+                      continuously for 24 hours.
+                    </p>
+                    <p className="mb-2 font-mono text-[11px] text-foreground/80">
+                      Profit per Harvest × (24h ÷ Harvest Time) × Land
+                      Multiplier
+                    </p>
+                    <p className="text-muted-foreground">
+                      Only items with fully set prices are ranked. Crafting
+                      recipes are excluded.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <div
                 className="mt-0.5 truncate text-sm font-medium"
                 title={top24hItem.name}
@@ -179,9 +212,36 @@ export function SummaryPanel({
             <div className="rounded-lg bg-surface-2 p-3">
               <div className="mb-2.5 flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Best per Time Window
-                </span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex cursor-help items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Best per Time Window
+                        <Info className="ml-1 inline h-3 w-3 cursor-help text-muted-foreground/60" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="left"
+                      className="max-w-xs text-xs"
+                      data-ocid="summary.time_window.tooltip"
+                    >
+                      <p className="mb-1 font-semibold">Best per Time Window</p>
+                      <p className="mb-2 text-muted-foreground">
+                        For each time window (e.g. 6h), finds the gathering item
+                        with the highest total profit if harvested back-to-back
+                        within that window.
+                      </p>
+                      <p className="mb-2 font-mono text-[11px] text-foreground/80">
+                        floor(Window ÷ Harvest Time) × Profit per Harvest
+                      </p>
+                      <p className="text-muted-foreground">
+                        e.g. a 2h window with an item that harvests every 45 min
+                        = 2 harvests. Result shown as &ldquo;+Xs · ×N
+                        harvests&rdquo;.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
 
               {hasNoData ? (
@@ -195,26 +255,26 @@ export function SummaryPanel({
                     return (
                       <div
                         key={W}
-                        className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0"
+                        className="flex items-start gap-2 py-2 first:pt-0 last:pb-0"
                       >
                         {/* Window label */}
-                        <span className="font-mono w-7 shrink-0 text-[11px] text-muted-foreground">
+                        <span className="font-mono w-7 shrink-0 text-xs font-semibold text-foreground/70 mt-0.5">
                           {W}h
                         </span>
 
                         {entry ? (
                           <>
                             {/* Item name + category */}
-                            <div className="min-w-0 flex-1 flex items-center gap-1.5 overflow-hidden">
+                            <div className="min-w-0 flex-1 overflow-hidden">
                               <span
-                                className="truncate text-xs font-medium leading-tight"
+                                className="block truncate text-xs font-medium leading-tight text-foreground"
                                 title={entry.name}
                               >
                                 {entry.name}
                               </span>
                               <Badge
                                 variant="outline"
-                                className={`shrink-0 border px-1 py-0 text-[9px] font-medium leading-tight ${CATEGORY_BADGE_COLORS[entry.category] ?? "bg-surface-3 text-muted-foreground border-border"}`}
+                                className={`mt-0.5 shrink-0 border px-1 py-0 text-[10px] font-medium leading-tight ${CATEGORY_BADGE_COLORS[entry.category] ?? "bg-surface-3 text-muted-foreground border-border"}`}
                               >
                                 {entry.category}
                               </Badge>
@@ -222,14 +282,14 @@ export function SummaryPanel({
 
                             {/* Profit + harvests */}
                             <div className="shrink-0 text-right">
-                              <div className="font-mono text-[11px] font-semibold tabular-nums text-profit leading-tight">
+                              <div className="font-mono text-sm font-bold tabular-nums text-profit leading-tight">
                                 +
                                 {entry.windowProfit.toLocaleString(undefined, {
                                   maximumFractionDigits: 0,
                                 })}
                                 s
                               </div>
-                              <div className="font-mono text-[9px] text-muted-foreground tabular-nums leading-tight">
+                              <div className="font-mono text-[10px] text-muted-foreground tabular-nums leading-tight mt-0.5">
                                 ×{entry.harvests} harvests
                               </div>
                             </div>
