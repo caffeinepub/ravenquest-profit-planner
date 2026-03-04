@@ -19,8 +19,10 @@ import {
 import { useActor } from "@/hooks/useActor";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useMarketDepthStore } from "@/lib/marketDepth/store";
 import { usePriceBookStore } from "@/lib/priceBook/store";
 import type { PriceBook } from "@/lib/priceBook/types";
+import { cn } from "@/lib/utils";
 import {
   Check,
   Download,
@@ -63,6 +65,8 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
 
   // In guild mode, only admin can edit
   const isReadOnly = guildMode && !isAdmin;
+
+  const { setDepth, getDepth, getLiquidityLabel } = useMarketDepthStore();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -404,6 +408,7 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
               <TableRow className="border-border">
                 <TableHead className="text-xs">Item</TableHead>
                 <TableHead className="text-right text-xs">Price (s)</TableHead>
+                <TableHead className="text-center text-xs">Liquidity</TableHead>
                 {guildMode ? (
                   <TableHead className="text-right text-xs">
                     Last updated by
@@ -418,7 +423,7 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
               {entries.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={5}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
                     {totalCount === 0
@@ -427,90 +432,182 @@ export function PriceBookPanel({ open, onClose }: PriceBookPanelProps) {
                   </TableCell>
                 </TableRow>
               ) : (
-                entries.map((entry) => (
-                  <TableRow key={entry.itemId} className="border-border">
-                    <TableCell className="py-2 text-sm font-medium">
-                      {entry.itemName}
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      {!isReadOnly && editingId === entry.itemId ? (
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={editingValue}
-                          autoFocus
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onKeyDown={(e) =>
-                            handleKeyDown(e, entry.itemId, entry.itemName)
-                          }
-                          onBlur={() =>
-                            void saveEdit(entry.itemId, entry.itemName)
-                          }
-                          className="h-7 w-24 bg-surface-2 text-right font-mono text-xs"
-                        />
-                      ) : (
-                        <span className="font-num text-sm">
-                          {entry.price.toLocaleString(undefined, {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}
-                          <span className="ml-0.5 text-xs text-muted-foreground">
-                            s
-                          </span>
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 text-right text-xs text-muted-foreground">
-                      {guildMode
-                        ? attributions[entry.itemId]
-                          ? `${attributions[entry.itemId].slice(0, 8)}…`
-                          : "—"
-                        : new Date(entry.lastUpdated).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      {isReadOnly ? (
-                        <Lock className="ml-auto h-3 w-3 text-muted-foreground/40" />
-                      ) : (
-                        <div className="flex justify-end gap-1">
-                          {editingId === entry.itemId ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() =>
-                                void saveEdit(entry.itemId, entry.itemName)
-                              }
-                            >
-                              <Check className="h-3.5 w-3.5 text-profit" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() =>
-                                startEdit(entry.itemId, entry.price)
-                              }
-                            >
-                              <Pencil className="h-3 w-3 text-muted-foreground" />
-                            </Button>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={() =>
-                              void handleClearOne(entry.itemId, entry.itemName)
+                entries.map((entry, rowIndex) => {
+                  const depth = getDepth(entry.itemId);
+                  const liquidityLabel = getLiquidityLabel(entry.itemId);
+                  return (
+                    <TableRow key={entry.itemId} className="border-border">
+                      <TableCell className="py-2 text-sm font-medium">
+                        {entry.itemName}
+                      </TableCell>
+                      <TableCell className="py-2 text-right">
+                        {!isReadOnly && editingId === entry.itemId ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={editingValue}
+                            autoFocus
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onKeyDown={(e) =>
+                              handleKeyDown(e, entry.itemId, entry.itemName)
                             }
+                            onBlur={() =>
+                              void saveEdit(entry.itemId, entry.itemName)
+                            }
+                            className="h-7 w-24 bg-surface-2 text-right font-mono text-xs"
+                          />
+                        ) : (
+                          <span className="font-num text-sm">
+                            {entry.price.toLocaleString(undefined, {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            })}
+                            <span className="ml-0.5 text-xs text-muted-foreground">
+                              s
+                            </span>
+                          </span>
+                        )}
+                        {/* Buy / Sell orders inputs */}
+                        {!isReadOnly && (
+                          <div className="mt-1.5 flex items-center gap-1.5 justify-end">
+                            <Input
+                              data-ocid={`price_book.buy_orders_input.${rowIndex + 1}`}
+                              type="number"
+                              min="0"
+                              placeholder="—"
+                              title="Buy orders"
+                              value={depth?.buyOrders ?? ""}
+                              onChange={(e) => {
+                                const val =
+                                  e.target.value === ""
+                                    ? null
+                                    : Number.parseInt(e.target.value, 10);
+                                setDepth(
+                                  entry.itemId,
+                                  Number.isNaN(val as number) ? null : val,
+                                  depth?.sellOrders ?? null,
+                                );
+                              }}
+                              className="h-6 w-16 bg-surface-2 text-right font-mono text-[11px] px-1.5"
+                            />
+                            <span className="text-[10px] text-muted-foreground/60">
+                              B
+                            </span>
+                            <Input
+                              data-ocid={`price_book.sell_orders_input.${rowIndex + 1}`}
+                              type="number"
+                              min="0"
+                              placeholder="—"
+                              title="Sell orders"
+                              value={depth?.sellOrders ?? ""}
+                              onChange={(e) => {
+                                const val =
+                                  e.target.value === ""
+                                    ? null
+                                    : Number.parseInt(e.target.value, 10);
+                                setDepth(
+                                  entry.itemId,
+                                  depth?.buyOrders ?? null,
+                                  Number.isNaN(val as number) ? null : val,
+                                );
+                              }}
+                              className="h-6 w-16 bg-surface-2 text-right font-mono text-[11px] px-1.5"
+                            />
+                            <span className="text-[10px] text-muted-foreground/60">
+                              S
+                            </span>
+                          </div>
+                        )}
+                      </TableCell>
+                      {/* Liquidity badge */}
+                      <TableCell className="py-2 text-center">
+                        {liquidityLabel !== "unknown" ? (
+                          <span
+                            className={cn(
+                              "inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border",
+                              liquidityLabel === "high" &&
+                                "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+                              liquidityLabel === "medium" &&
+                                "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+                              liquidityLabel === "low" &&
+                                "bg-red-500/15 text-red-400 border-red-500/30",
+                            )}
                           >
-                            <X className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                            {liquidityLabel === "high"
+                              ? "HIGH"
+                              : liquidityLabel === "medium"
+                                ? "MED"
+                                : "LOW"}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 text-right text-xs text-muted-foreground">
+                        {guildMode
+                          ? attributions[entry.itemId]
+                            ? `${attributions[entry.itemId].slice(0, 8)}…`
+                            : "—"
+                          : new Date(entry.lastUpdated).toLocaleString(
+                              undefined,
+                              {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                      </TableCell>
+                      <TableCell className="py-2 text-right">
+                        {isReadOnly ? (
+                          <Lock className="ml-auto h-3 w-3 text-muted-foreground/40" />
+                        ) : (
+                          <div className="flex justify-end gap-1">
+                            {editingId === entry.itemId ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() =>
+                                  void saveEdit(entry.itemId, entry.itemName)
+                                }
+                              >
+                                <Check className="h-3.5 w-3.5 text-profit" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() =>
+                                  startEdit(entry.itemId, entry.price)
+                                }
+                              >
+                                <Pencil className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={() =>
+                                void handleClearOne(
+                                  entry.itemId,
+                                  entry.itemName,
+                                )
+                              }
+                            >
+                              <X className="h-3 w-3 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

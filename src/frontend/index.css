@@ -5,7 +5,8 @@
 /* ─── Fonts ─────────────────────────────────────────────────────────────── */
 @font-face {
   font-family: "Bricolage Grotesque";
-  src: url("/assets/fonts/BricolageGrotesque[opsz,wdth,wght].woff2") format("woff2");
+  src: url("/assets/fonts/BricolageGrotesque[opsz,wdth,wght].woff2")
+    format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -34,7 +35,7 @@
     /* Dark slate theme — default to dark */
     --background: 0.17 0.018 275;
     --foreground: 0.91 0.012 75;
-    --card: 0.20 0.022 275;
+    --card: 0.2 0.022 275;
     --card-foreground: 0.91 0.012 75;
     --popover: 0.19 0.022 275;
     --popover-foreground: 0.91 0.012 75;
@@ -48,8 +49,8 @@
     --secondary-foreground: 0.91 0.012 75;
 
     /* Muted: Medium dark slate */
-    --muted: 0.24 0.020 275;
-    --muted-foreground: 0.60 0.014 75;
+    --muted: 0.24 0.02 275;
+    --muted-foreground: 0.6 0.014 75;
 
     /* Accent: Slate highlight */
     --accent: 0.28 0.028 270;
@@ -76,14 +77,14 @@
     --chart-2: 0.72 0.16 148;
     --chart-3: 0.62 0.22 22;
     --chart-4: 0.65 0.14 280;
-    --chart-5: 0.70 0.15 200;
+    --chart-5: 0.7 0.15 200;
 
     /* Sidebar */
     --sidebar: 0.15 0.018 275;
     --sidebar-foreground: 0.91 0.012 75;
     --sidebar-primary: 0.77 0.17 58;
     --sidebar-primary-foreground: 0.13 0.025 58;
-    --sidebar-accent: 0.22 0.020 275;
+    --sidebar-accent: 0.22 0.02 275;
     --sidebar-accent-foreground: 0.91 0.012 75;
     --sidebar-border: 0.26 0.022 275;
     --sidebar-ring: 0.77 0.17 58;
@@ -93,7 +94,7 @@
     --gold-dim: 0.65 0.13 58;
     --profit: 0.72 0.16 148;
     --loss: 0.62 0.22 22;
-    --surface-1: 0.20 0.022 275;
+    --surface-1: 0.2 0.022 275;
     --surface-2: 0.24 0.025 275;
     --surface-3: 0.28 0.028 275;
     --glow-amber: 0.77 0.17 58;
@@ -101,48 +102,48 @@
 
   .light {
     --background: 0.97 0.008 75;
-    --foreground: 0.18 0.020 270;
+    --foreground: 0.18 0.02 270;
     --card: 0.99 0.005 75;
-    --card-foreground: 0.18 0.020 270;
+    --card-foreground: 0.18 0.02 270;
     --popover: 0.99 0.005 75;
-    --popover-foreground: 0.18 0.020 270;
+    --popover-foreground: 0.18 0.02 270;
     --primary: 0.65 0.15 55;
     --primary-foreground: 0.99 0.005 75;
-    --secondary: 0.93 0.010 75;
-    --secondary-foreground: 0.18 0.020 270;
+    --secondary: 0.93 0.01 75;
+    --secondary-foreground: 0.18 0.02 270;
     --muted: 0.95 0.008 75;
-    --muted-foreground: 0.50 0.015 75;
-    --accent: 0.90 0.012 75;
-    --accent-foreground: 0.18 0.020 270;
+    --muted-foreground: 0.5 0.015 75;
+    --accent: 0.9 0.012 75;
+    --accent-foreground: 0.18 0.02 270;
     --success: 0.58 0.14 148;
     --success-foreground: 0.99 0.005 75;
     --warning: 0.65 0.15 55;
     --warning-foreground: 0.99 0.005 75;
-    --destructive: 0.55 0.20 22;
+    --destructive: 0.55 0.2 22;
     --destructive-foreground: 0.99 0.005 75;
     --border: 0.88 0.012 75;
-    --input: 0.92 0.010 75;
+    --input: 0.92 0.01 75;
     --ring: 0.65 0.15 55;
     --chart-1: 0.65 0.15 55;
     --chart-2: 0.58 0.14 148;
-    --chart-3: 0.55 0.20 22;
+    --chart-3: 0.55 0.2 22;
     --chart-4: 0.55 0.12 280;
-    --chart-5: 0.60 0.13 200;
+    --chart-5: 0.6 0.13 200;
     --sidebar: 0.95 0.008 75;
-    --sidebar-foreground: 0.18 0.020 270;
+    --sidebar-foreground: 0.18 0.02 270;
     --sidebar-primary: 0.65 0.15 55;
     --sidebar-primary-foreground: 0.99 0.005 75;
-    --sidebar-accent: 0.90 0.012 75;
-    --sidebar-accent-foreground: 0.18 0.020 270;
+    --sidebar-accent: 0.9 0.012 75;
+    --sidebar-accent-foreground: 0.18 0.02 270;
     --sidebar-border: 0.88 0.012 75;
     --sidebar-ring: 0.65 0.15 55;
     --gold: 0.65 0.15 55;
     --gold-dim: 0.55 0.11 55;
     --profit: 0.58 0.14 148;
-    --loss: 0.55 0.20 22;
+    --loss: 0.55 0.2 22;
     --surface-1: 0.99 0.005 75;
     --surface-2: 0.95 0.008 75;
-    --surface-3: 0.90 0.012 75;
+    --surface-3: 0.9 0.012 75;
     --glow-amber: 0.65 0.15 55;
   }
 

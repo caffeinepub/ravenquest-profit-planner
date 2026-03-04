@@ -1,3 +1,4 @@
+import type { PlayerStatus } from "@/lib/calculator/growTimeBands";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -16,10 +17,14 @@ interface ConfigState {
   landMultiplier: number;
   marketFeePercent: number;
   craftTaxPercent: number;
+  playerStatus: PlayerStatus;
+  rowCap: number;
 
   setLandSize: (size: LandSize) => void;
   setMarketFeePercent: (percent: number) => void;
   setCraftTaxPercent: (percent: number) => void;
+  setPlayerStatus: (s: PlayerStatus) => void;
+  setRowCap: (n: number) => void;
 }
 
 export const useConfigStore = create<ConfigState>()(
@@ -29,6 +34,8 @@ export const useConfigStore = create<ConfigState>()(
       landMultiplier: LAND_MULTIPLIERS.medium,
       marketFeePercent: 5,
       craftTaxPercent: 0,
+      playerStatus: "active" as PlayerStatus,
+      rowCap: 2,
 
       setLandSize: (size: LandSize) => {
         set({
@@ -44,9 +51,17 @@ export const useConfigStore = create<ConfigState>()(
       setCraftTaxPercent: (percent: number) => {
         set({ craftTaxPercent: Math.max(0, Math.min(100, percent)) });
       },
+
+      setPlayerStatus: (s: PlayerStatus) => {
+        set({ playerStatus: s });
+      },
+
+      setRowCap: (n: number) => {
+        set({ rowCap: Math.max(1, Math.min(20, n)) });
+      },
     }),
     {
-      name: "rq-config:v1",
+      name: "rq-config:v2",
     },
   ),
 );

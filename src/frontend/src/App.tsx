@@ -1,4 +1,5 @@
 import { GlobalSettingsBar } from "@/components/GlobalSettingsBar";
+import { LandAdvisor } from "@/components/LandAdvisor";
 import { PriceBookPanel } from "@/components/PriceBookPanel";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,11 +12,13 @@ import { cn } from "@/lib/utils";
 import { AllItemsCalculator } from "@/pages/AllItemsCalculator";
 import { CraftingCalculator } from "@/pages/CraftingCalculator";
 import { FarmingCalculator } from "@/pages/FarmingCalculator";
+import { GrowTimeStrategy } from "@/pages/GrowTimeStrategy";
 import { GuildPlanner } from "@/pages/GuildPlanner";
 import { HerbalismCalculator } from "@/pages/HerbalismCalculator";
 import { HusbandryCalculator } from "@/pages/HusbandryCalculator";
 import { LandPlanner } from "@/pages/LandPlanner";
 import { WoodcuttingCalculator } from "@/pages/WoodcuttingCalculator";
+import { useConfigStore } from "@/store/configStore";
 import {
   BookOpen,
   Hammer,
@@ -24,8 +27,10 @@ import {
   Loader2,
   LogOut,
   Map as MapIcon,
+  MapPinned,
   PawPrint,
   Sprout,
+  Timer,
   Trees,
   User,
   Users,
@@ -35,6 +40,7 @@ import { useState } from "react";
 
 type Tab =
   | "all"
+  | "strategy"
   | "farming"
   | "herbalism"
   | "woodcutting"
@@ -120,6 +126,8 @@ function AuthButton() {
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [priceBookOpen, setPriceBookOpen] = useState(false);
+  const [landAdvisorOpen, setLandAdvisorOpen] = useState(false);
+  const configStore = useConfigStore();
 
   const tabs: Array<{
     id: Tab;
@@ -132,6 +140,12 @@ function AppContent() {
       label: "All Items",
       icon: <LayoutGrid className="h-4 w-4" />,
       color: "text-gold",
+    },
+    {
+      id: "strategy",
+      label: "Strategy",
+      icon: <Timer className="h-4 w-4" />,
+      color: "text-blue-400",
     },
     {
       id: "farming",
@@ -218,6 +232,25 @@ function AppContent() {
       {/* ── Global Settings Bar ── */}
       <GlobalSettingsBar onOpenPriceBook={() => setPriceBookOpen(true)} />
 
+      {/* ── Land Advisor Bar ── */}
+      <div className="border-b border-border bg-surface-1/60 backdrop-blur">
+        <div className="container mx-auto px-4 py-2 flex items-center gap-3">
+          <Button
+            data-ocid="land_advisor.open_modal_button"
+            variant="outline"
+            size="sm"
+            onClick={() => setLandAdvisorOpen(true)}
+            className="gap-2 border-border bg-surface-2 hover:bg-surface-3 text-xs"
+          >
+            <MapPinned className="h-3.5 w-3.5 text-teal-400" />
+            Analyze Land Screenshot
+          </Button>
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            Get crop recommendations for your plots based on current prices
+          </span>
+        </div>
+      </div>
+
       {/* ── Tab Navigation ── */}
       <nav className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4">
@@ -257,6 +290,7 @@ function AppContent() {
       {/* ── Tab Content ── */}
       <main>
         {activeTab === "all" && <AllItemsCalculator />}
+        {activeTab === "strategy" && <GrowTimeStrategy />}
         {activeTab === "farming" && <FarmingCalculator />}
         {activeTab === "herbalism" && <HerbalismCalculator />}
         {activeTab === "woodcutting" && <WoodcuttingCalculator />}
@@ -266,47 +300,17 @@ function AppContent() {
         {activeTab === "guild" && <GuildPlanner />}
       </main>
 
-      {/* ── Footer ── */}
-      <footer className="mt-12 border-t border-border bg-surface-1 py-6">
-        <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
-          <p>
-            Data from{" "}
-            <a
-              href="https://api.ravendawn.online/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gold hover:underline"
-            >
-              Ravendawn API
-            </a>
-            {" · "}
-            <a
-              href="https://ravenquest.io/en/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gold hover:underline"
-            >
-              RavenQuest Official
-            </a>
-          </p>
-          <p className="mt-1">
-            © {new Date().getFullYear()}. Built with ❤️ using{" "}
-            <a
-              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gold hover:underline"
-            >
-              caffeine.ai
-            </a>
-          </p>
-        </div>
-      </footer>
-
       {/* ── Price Book Panel ── */}
       <PriceBookPanel
         open={priceBookOpen}
         onClose={() => setPriceBookOpen(false)}
+      />
+
+      {/* ── Land Advisor Sheet ── */}
+      <LandAdvisor
+        open={landAdvisorOpen}
+        onClose={() => setLandAdvisorOpen(false)}
+        playerStatus={configStore.playerStatus}
       />
 
       <Toaster />
