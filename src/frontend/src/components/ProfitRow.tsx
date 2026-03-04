@@ -5,6 +5,10 @@ import {
   calculateGatheringProfit,
   calculateHusbandryProfit,
 } from "@/lib/calculator/profitEngine";
+import {
+  calculateGatheringProfit as calcGathering,
+  calculateHusbandryProfit as calcHusbandry,
+} from "@/lib/calculator/profitEngine";
 import type { ProfitResult } from "@/lib/calculator/types";
 import { usePriceBookStore } from "@/lib/priceBook/store";
 import { cn } from "@/lib/utils";
@@ -178,7 +182,7 @@ function ProfitDisplay({
       )}
     >
       {isPositive ? "+" : ""}
-      {formatGold(value)}
+      {formatGold(value)}s
       {result.confidence === "medium" && (
         <span className="ml-1 text-xs text-warning">~</span>
       )}
@@ -290,14 +294,14 @@ export function GatheringProfitRow({
                 ) : result.profitPerHarvest < 0 ? (
                   <TrendingDown className="inline h-3.5 w-3.5 mr-1" />
                 ) : null}
-                {formatGold(result.profitPerHarvest)}g
+                {formatGold(result.profitPerHarvest)}s
               </>
             )}
           </div>
           {result.profitPerHour !== null && result.confidence !== "low" && (
             <div className="font-num text-xs text-muted-foreground">
               <Zap className="inline h-3 w-3 mr-0.5" />
-              {formatGold(result.profitPerHour)}/h
+              {formatGold(result.profitPerHour)}s/h
             </div>
           )}
         </div>
@@ -390,7 +394,7 @@ export function GatheringProfitRow({
                     <span className="font-num">
                       {result.confidence === "low"
                         ? "—"
-                        : `${formatGold(result.totalRevenue)}g`}
+                        : `${formatGold(result.totalRevenue)}s`}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -400,7 +404,7 @@ export function GatheringProfitRow({
                     <span className="font-num text-loss">
                       {result.confidence === "low"
                         ? "—"
-                        : `−${formatGold(result.totalRevenue - result.netRevenue)}g`}
+                        : `−${formatGold(result.totalRevenue - result.netRevenue)}s`}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-border/50 pt-2 font-semibold">
@@ -426,6 +430,84 @@ export function GatheringProfitRow({
                   </div>
                 )}
               </div>
+
+              {/* Land Multiplier Breakdown */}
+              {result.confidence !== "low" && (
+                <div className="mt-3">
+                  <h5 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Profit by Land Size
+                  </h5>
+                  <div className="rounded-md overflow-hidden border border-border/50">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-surface-2 text-muted-foreground">
+                          <th className="px-2 py-1.5 text-left font-medium">
+                            Land
+                          </th>
+                          <th className="px-2 py-1.5 text-right font-medium">
+                            Per Harvest
+                          </th>
+                          <th className="px-2 py-1.5 text-right font-medium">
+                            Per Hour
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(
+                          [
+                            { label: "Small", mult: 1 },
+                            { label: "Medium", mult: 2 },
+                            { label: "Large", mult: 4 },
+                            { label: "Stronghold", mult: 8 },
+                            { label: "Fort", mult: 20 },
+                          ] as const
+                        ).map(({ label, mult }) => {
+                          const r = calcGathering(item, quantity, {
+                            landMultiplier: mult,
+                            marketFeePercent,
+                            getPrice,
+                          });
+                          const isActive = landMultiplier === mult;
+                          const color =
+                            r.profitPerHarvest > 0
+                              ? "text-profit"
+                              : r.profitPerHarvest < 0
+                                ? "text-loss"
+                                : "text-muted-foreground";
+                          return (
+                            <tr
+                              key={mult}
+                              className={isActive ? "bg-surface-2/70" : ""}
+                            >
+                              <td className="px-2 py-1.5 font-medium">
+                                {label}
+                                {isActive && (
+                                  <span className="ml-1.5 rounded bg-primary/20 px-1 py-0.5 text-[9px] text-primary">
+                                    active
+                                  </span>
+                                )}
+                              </td>
+                              <td
+                                className={`px-2 py-1.5 text-right font-num font-semibold tabular-nums ${color}`}
+                              >
+                                {r.profitPerHarvest > 0 ? "+" : ""}
+                                {formatGold(r.profitPerHarvest)}s
+                              </td>
+                              <td
+                                className={`px-2 py-1.5 text-right font-num tabular-nums ${color}`}
+                              >
+                                {r.profitPerHour !== null
+                                  ? `${r.profitPerHour > 0 ? "+" : ""}${formatGold(r.profitPerHour)}s/h`
+                                  : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -555,14 +637,14 @@ export function HusbandryProfitRow({
                 {result.profitPerHarvest > 0 ? (
                   <TrendingUp className="inline h-3.5 w-3.5 mr-1" />
                 ) : null}
-                {formatGold(result.profitPerHarvest)}g
+                {formatGold(result.profitPerHarvest)}s
               </>
             )}
           </div>
           {result.profitPerHour !== null && result.confidence !== "low" && (
             <div className="font-num text-xs text-muted-foreground">
               <Zap className="inline h-3 w-3 mr-0.5" />
-              {formatGold(result.profitPerHour)}/h
+              {formatGold(result.profitPerHour)}s/h
             </div>
           )}
         </div>
@@ -651,7 +733,7 @@ export function HusbandryProfitRow({
                     <span className="font-num">
                       {result.confidence === "low"
                         ? "—"
-                        : `${formatGold(result.totalRevenue)}g`}
+                        : `${formatGold(result.totalRevenue)}s`}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -661,7 +743,7 @@ export function HusbandryProfitRow({
                     <span className="font-num text-loss">
                       {result.confidence === "low"
                         ? "—"
-                        : `−${formatGold(result.totalRevenue - result.netRevenue)}g`}
+                        : `−${formatGold(result.totalRevenue - result.netRevenue)}s`}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-border/50 pt-2 font-semibold">
@@ -678,6 +760,84 @@ export function HusbandryProfitRow({
                 {result.missingPrices.length > 0 && (
                   <div className="mt-3 rounded bg-warning/10 px-2 py-1.5 text-xs text-warning">
                     Missing prices: {result.missingPrices.join(", ")}
+                  </div>
+                )}
+
+                {/* Land Multiplier Breakdown */}
+                {result.confidence !== "low" && (
+                  <div className="mt-3">
+                    <h5 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Profit by Land Size
+                    </h5>
+                    <div className="rounded-md overflow-hidden border border-border/50">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-surface-2 text-muted-foreground">
+                            <th className="px-2 py-1.5 text-left font-medium">
+                              Land
+                            </th>
+                            <th className="px-2 py-1.5 text-right font-medium">
+                              Per Harvest
+                            </th>
+                            <th className="px-2 py-1.5 text-right font-medium">
+                              Per Hour
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(
+                            [
+                              { label: "Small", mult: 1 },
+                              { label: "Medium", mult: 2 },
+                              { label: "Large", mult: 4 },
+                              { label: "Stronghold", mult: 8 },
+                              { label: "Fort", mult: 20 },
+                            ] as const
+                          ).map(({ label, mult }) => {
+                            const r = calcHusbandry(item, mode, quantity, {
+                              landMultiplier: mult,
+                              marketFeePercent,
+                              getPrice,
+                            });
+                            const isActive = landMultiplier === mult;
+                            const color =
+                              r.profitPerHarvest > 0
+                                ? "text-profit"
+                                : r.profitPerHarvest < 0
+                                  ? "text-loss"
+                                  : "text-muted-foreground";
+                            return (
+                              <tr
+                                key={mult}
+                                className={isActive ? "bg-surface-2/70" : ""}
+                              >
+                                <td className="px-2 py-1.5 font-medium">
+                                  {label}
+                                  {isActive && (
+                                    <span className="ml-1.5 rounded bg-primary/20 px-1 py-0.5 text-[9px] text-primary">
+                                      active
+                                    </span>
+                                  )}
+                                </td>
+                                <td
+                                  className={`px-2 py-1.5 text-right font-num font-semibold tabular-nums ${color}`}
+                                >
+                                  {r.profitPerHarvest > 0 ? "+" : ""}
+                                  {formatGold(r.profitPerHarvest)}s
+                                </td>
+                                <td
+                                  className={`px-2 py-1.5 text-right font-num tabular-nums ${color}`}
+                                >
+                                  {r.profitPerHour !== null
+                                    ? `${r.profitPerHour > 0 ? "+" : ""}${formatGold(r.profitPerHour)}s/h`
+                                    : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

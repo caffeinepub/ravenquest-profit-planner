@@ -76,7 +76,7 @@ export function SummaryPanel({ results, totalItems }: SummaryPanelProps) {
               totalProfit > 0 ? "text-profit" : "text-muted-foreground"
             }`}
           >
-            {positiveResults.length > 0 ? `+${formatGold(totalProfit)}g` : "—"}
+            {positiveResults.length > 0 ? `+${formatGold(totalProfit)}s` : "—"}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             {positiveResults.length} of {results.length} profitable
@@ -102,11 +102,11 @@ export function SummaryPanel({ results, totalItems }: SummaryPanelProps) {
                 {bestItem.name}
               </div>
               <div className="font-num text-lg font-bold text-profit">
-                +{formatGold(bestItem.profitPerHarvest)}g
+                +{formatGold(bestItem.profitPerHarvest)}s
               </div>
               {bestItem.profitPerHour !== null && (
                 <div className="font-num text-xs text-muted-foreground">
-                  {formatGold(bestItem.profitPerHour)}g/h
+                  {formatGold(bestItem.profitPerHour)}s/h
                 </div>
               )}
             </div>
