@@ -2,19 +2,113 @@ import { GlobalSettingsBar } from "@/components/GlobalSettingsBar";
 import { PriceBookPanel } from "@/components/PriceBookPanel";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  InternetIdentityProvider,
+  useInternetIdentity,
+} from "@/hooks/useInternetIdentity";
 import { cn } from "@/lib/utils";
+import { AllItemsCalculator } from "@/pages/AllItemsCalculator";
+import { CraftingCalculator } from "@/pages/CraftingCalculator";
 import { FarmingCalculator } from "@/pages/FarmingCalculator";
+import { GuildPlanner } from "@/pages/GuildPlanner";
 import { HerbalismCalculator } from "@/pages/HerbalismCalculator";
 import { HusbandryCalculator } from "@/pages/HusbandryCalculator";
 import { WoodcuttingCalculator } from "@/pages/WoodcuttingCalculator";
-import { BookOpen, Leaf, PawPrint, Sprout, Trees } from "lucide-react";
+import {
+  BookOpen,
+  Hammer,
+  LayoutGrid,
+  Leaf,
+  Loader2,
+  LogOut,
+  PawPrint,
+  Sprout,
+  Trees,
+  User,
+  Users,
+} from "lucide-react";
 import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 
-type Tab = "farming" | "herbalism" | "woodcutting" | "husbandry";
+type Tab =
+  | "all"
+  | "farming"
+  | "herbalism"
+  | "woodcutting"
+  | "husbandry"
+  | "crafting"
+  | "guild";
+
+// ─── Auth Button ──────────────────────────────────────────────────────────────
+
+function AuthButton() {
+  const {
+    login,
+    clear,
+    identity,
+    isInitializing,
+    isLoggingIn,
+    isLoginSuccess,
+  } = useInternetIdentity();
+
+  const isLoggedIn = isLoginSuccess && !!identity;
+  const isLoading = isInitializing || isLoggingIn;
+
+  if (isLoading) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        className="gap-2 border-border bg-surface-2"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="hidden sm:inline">Loading…</span>
+      </Button>
+    );
+  }
+
+  if (isLoggedIn && identity) {
+    const principal = identity.getPrincipal().toText();
+    const shortId = `${principal.slice(0, 8)}…`;
+    return (
+      <div className="flex items-center gap-1">
+        <div className="hidden items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 sm:flex">
+          <User className="h-3.5 w-3.5 text-violet-400" />
+          <span className="font-mono text-xs text-violet-300">{shortId}</span>
+        </div>
+        <Button
+          data-ocid="auth.logout_button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          onClick={clear}
+          title="Log out"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      data-ocid="auth.login_button"
+      variant="outline"
+      size="sm"
+      className="gap-2 border-border bg-surface-2 hover:bg-surface-3"
+      onClick={login}
+    >
+      <User className="h-4 w-4" />
+      <span className="hidden sm:inline">Login</span>
+    </Button>
+  );
+}
+
+// ─── App Content ──────────────────────────────────────────────────────────────
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState<Tab>("farming");
+  const [activeTab, setActiveTab] = useState<Tab>("all");
   const [priceBookOpen, setPriceBookOpen] = useState(false);
 
   const tabs: Array<{
@@ -23,6 +117,12 @@ function AppContent() {
     icon: React.ReactNode;
     color: string;
   }> = [
+    {
+      id: "all",
+      label: "All Items",
+      icon: <LayoutGrid className="h-4 w-4" />,
+      color: "text-gold",
+    },
     {
       id: "farming",
       label: "Farming",
@@ -47,6 +147,18 @@ function AppContent() {
       icon: <PawPrint className="h-4 w-4" />,
       color: "text-orange-400",
     },
+    {
+      id: "crafting",
+      label: "Crafting",
+      icon: <Hammer className="h-4 w-4" />,
+      color: "text-cyan-400",
+    },
+    {
+      id: "guild",
+      label: "Guild Planner",
+      icon: <Users className="h-4 w-4" />,
+      color: "text-violet-400",
+    },
   ];
 
   return (
@@ -64,7 +176,8 @@ function AppContent() {
                   RavenQuest Profit Planner
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Farming · Herbalism · Woodcutting · Husbandry
+                  All Items · Farming · Herbalism · Woodcutting · Husbandry ·
+                  Crafting
                 </p>
               </div>
             </div>
@@ -80,6 +193,7 @@ function AppContent() {
                 <BookOpen className="h-4 w-4" />
                 <span className="hidden sm:inline">Price Book</span>
               </Button>
+              <AuthButton />
             </div>
           </div>
         </div>
@@ -96,13 +210,20 @@ function AppContent() {
               <button
                 key={tab.id}
                 type="button"
-                data-ocid={`app.${tab.id}_tab`}
+                data-ocid={
+                  tab.id === "guild" ? "guild_planner.tab" : `app.${tab.id}_tab`
+                }
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                   activeTab === tab.id
                     ? `border-gold ${tab.color}`
                     : "border-transparent text-muted-foreground hover:text-foreground",
+                  tab.id === "guild" && activeTab !== tab.id
+                    ? "hover:text-violet-400"
+                    : tab.id === "crafting" && activeTab !== tab.id
+                      ? "hover:text-cyan-400"
+                      : "",
                 )}
               >
                 <span className={activeTab === tab.id ? tab.color : ""}>
@@ -117,10 +238,13 @@ function AppContent() {
 
       {/* ── Tab Content ── */}
       <main>
+        {activeTab === "all" && <AllItemsCalculator />}
         {activeTab === "farming" && <FarmingCalculator />}
         {activeTab === "herbalism" && <HerbalismCalculator />}
         {activeTab === "woodcutting" && <WoodcuttingCalculator />}
         {activeTab === "husbandry" && <HusbandryCalculator />}
+        {activeTab === "crafting" && <CraftingCalculator />}
+        {activeTab === "guild" && <GuildPlanner />}
       </main>
 
       {/* ── Footer ── */}
@@ -174,7 +298,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
-      <AppContent />
+      <InternetIdentityProvider>
+        <AppContent />
+      </InternetIdentityProvider>
     </ThemeProvider>
   );
 }

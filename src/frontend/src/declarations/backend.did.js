@@ -8,10 +8,124 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const idlService = IDL.Service({});
+export const UserRole = IDL.Variant({
+  'admin' : IDL.Null,
+  'user' : IDL.Null,
+  'guest' : IDL.Null,
+});
+export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const GrowingClaim = IDL.Record({
+  'itemId' : IDL.Nat,
+  'claimedAt' : IDL.Int,
+  'claimedBy' : IDL.Principal,
+  'itemName' : IDL.Text,
+  'landSize' : IDL.Text,
+  'quantity' : IDL.Nat,
+  'category' : IDL.Text,
+});
+export const PriceEntry = IDL.Record({
+  'itemId' : IDL.Nat,
+  'lastUpdatedAt' : IDL.Int,
+  'updatedBy' : IDL.Principal,
+  'itemName' : IDL.Text,
+  'price' : IDL.Float64,
+});
+
+export const idlService = IDL.Service({
+  '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'clearAll' : IDL.Func([], [], []),
+  'clearPrice' : IDL.Func([IDL.Nat], [], []),
+  'getAttributions' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Text))],
+      ['query'],
+    ),
+  'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
+  'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
+  'getMyClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
+  'getPrices' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Nat, PriceEntry))],
+      ['query'],
+    ),
+  'getUserProfile' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(UserProfile)],
+      ['query'],
+    ),
+  'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'removeClaim' : IDL.Func([IDL.Nat], [], []),
+  'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setClaim' : IDL.Func(
+      [IDL.Nat, IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+      [],
+      [],
+    ),
+  'setPrice' : IDL.Func([IDL.Nat, IDL.Text, IDL.Float64], [], []),
+});
 
 export const idlInitArgs = [];
 
-export const idlFactory = ({ IDL }) => { return IDL.Service({}); };
+export const idlFactory = ({ IDL }) => {
+  const UserRole = IDL.Variant({
+    'admin' : IDL.Null,
+    'user' : IDL.Null,
+    'guest' : IDL.Null,
+  });
+  const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const GrowingClaim = IDL.Record({
+    'itemId' : IDL.Nat,
+    'claimedAt' : IDL.Int,
+    'claimedBy' : IDL.Principal,
+    'itemName' : IDL.Text,
+    'landSize' : IDL.Text,
+    'quantity' : IDL.Nat,
+    'category' : IDL.Text,
+  });
+  const PriceEntry = IDL.Record({
+    'itemId' : IDL.Nat,
+    'lastUpdatedAt' : IDL.Int,
+    'updatedBy' : IDL.Principal,
+    'itemName' : IDL.Text,
+    'price' : IDL.Float64,
+  });
+  
+  return IDL.Service({
+    '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'clearAll' : IDL.Func([], [], []),
+    'clearPrice' : IDL.Func([IDL.Nat], [], []),
+    'getAttributions' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Text))],
+        ['query'],
+      ),
+    'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
+    'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
+    'getMyClaims' : IDL.Func([], [IDL.Vec(GrowingClaim)], ['query']),
+    'getPrices' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Nat, PriceEntry))],
+        ['query'],
+      ),
+    'getUserProfile' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(UserProfile)],
+        ['query'],
+      ),
+    'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'removeClaim' : IDL.Func([IDL.Nat], [], []),
+    'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setClaim' : IDL.Func(
+        [IDL.Nat, IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+        [],
+        [],
+      ),
+    'setPrice' : IDL.Func([IDL.Nat, IDL.Text, IDL.Float64], [], []),
+  });
+};
 
 export const init = ({ IDL }) => { return []; };

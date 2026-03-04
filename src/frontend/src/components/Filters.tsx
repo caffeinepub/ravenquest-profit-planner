@@ -26,6 +26,12 @@ interface FiltersProps {
   onShowOnlyPositiveChange: (show: boolean) => void;
   topN: number;
   onTopNChange: (n: number) => void;
+  // Optional harvest time filter (in hours, 0 = any)
+  maxHarvestHours?: number;
+  onMaxHarvestHoursChange?: (hours: number) => void;
+  // Optional category filter (for All Items view)
+  categoryFilter?: string;
+  onCategoryFilterChange?: (category: string) => void;
 }
 
 export function Filters({
@@ -40,6 +46,10 @@ export function Filters({
   onShowOnlyPositiveChange,
   topN,
   onTopNChange,
+  maxHarvestHours,
+  onMaxHarvestHoursChange,
+  categoryFilter,
+  onCategoryFilterChange,
 }: FiltersProps) {
   const [skillRange, setSkillRange] = useState([minSkill, maxSkill]);
 
@@ -145,6 +155,62 @@ export function Filters({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Max Harvest Time (optional) */}
+      {onMaxHarvestHoursChange !== undefined && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Max Harvest Time
+          </Label>
+          <Select
+            value={(maxHarvestHours ?? 0).toString()}
+            onValueChange={(v) => onMaxHarvestHoursChange(Number(v))}
+          >
+            <SelectTrigger
+              data-ocid="filters.max_harvest_select"
+              className="bg-surface-2 text-sm"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Any time</SelectItem>
+              <SelectItem value="1">Under 1 hour</SelectItem>
+              <SelectItem value="2">Under 2 hours</SelectItem>
+              <SelectItem value="6">Under 6 hours</SelectItem>
+              <SelectItem value="12">Under 12 hours</SelectItem>
+              <SelectItem value="24">Under 24 hours</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Category Filter (optional, for All Items view) */}
+      {onCategoryFilterChange !== undefined && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Category
+          </Label>
+          <Select
+            value={categoryFilter ?? "all"}
+            onValueChange={onCategoryFilterChange}
+          >
+            <SelectTrigger
+              data-ocid="filters.category_select"
+              className="bg-surface-2 text-sm"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="Farming">Farming</SelectItem>
+              <SelectItem value="Herbalism">Herbalism</SelectItem>
+              <SelectItem value="Woodcutting">Woodcutting</SelectItem>
+              <SelectItem value="Husbandry">Husbandry</SelectItem>
+              <SelectItem value="Crafting">Crafting</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 }

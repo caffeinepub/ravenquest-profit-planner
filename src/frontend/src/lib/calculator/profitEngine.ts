@@ -1,5 +1,46 @@
-import type { GatheringItem, HusbandryItem, ItemDrop } from "@/lib/api/types";
+import type {
+  CraftingRecipe,
+  GatheringItem,
+  HusbandryItem,
+  ItemDrop,
+} from "@/lib/api/types";
 import type { ConfidenceLevel, OutputItem, ProfitResult } from "./types";
+
+// ─── Crafting Types ────────────────────────────────────────────────────────────
+
+export interface CraftingCalcConfig {
+  marketFeePercent: number;
+  craftTaxPercent: number;
+  getPrice: (itemId: number) => number | null;
+}
+
+export interface CraftingInputItem {
+  itemId: number;
+  itemName: string;
+  amount: number;
+  price: number | null;
+  totalCost: number;
+}
+
+export interface CraftingProfitResult {
+  recipeId: number;
+  recipeName: string;
+  profession: string;
+  level: number;
+  experience: number;
+  outputQty: number;
+  outputPrice: number | null;
+  outputValue: number;
+  inputs: CraftingInputItem[];
+  totalInputCost: number;
+  craftTax: number;
+  totalCost: number;
+  profit: number;
+  profitMargin: number;
+  profitPerUnit: number;
+  confidence: ConfidenceLevel;
+  missingPrices: string[];
+}
 
 export interface CalculationConfig {
   landMultiplier: number;
@@ -92,6 +133,77 @@ export function calculateGatheringProfit(
     netRevenue,
     profitPerHarvest,
     profitPerHour,
+    confidence,
+    missingPrices,
+  };
+}
+
+export function calculateCraftingProfit(
+  recipe: CraftingRecipe,
+  config: CraftingCalcConfig,
+): CraftingProfitResult {
+  const { marketFeePercent, craftTaxPercent, getPrice } = config;
+
+  const inputs: CraftingInputItem[] = recipe.materials.map((mat) => {
+    const price = getPrice(mat.itemId);
+    const totalCost = price !== null ? mat.amount * price : 0;
+    return {
+      itemId: mat.itemId,
+      itemName: mat.name,
+      amount: mat.amount,
+      price,
+      totalCost,
+    };
+  });
+
+  const outputPrice = getPrice(recipe.itemId);
+  const totalInputCost = inputs.reduce((sum, i) => sum + i.totalCost, 0);
+  const craftTax = totalInputCost * (craftTaxPercent / 100);
+  const totalCost = totalInputCost + craftTax;
+
+  const outputValue =
+    outputPrice !== null
+      ? recipe.amount * outputPrice * (1 - marketFeePercent / 100)
+      : 0;
+
+  const profit = outputValue - totalCost;
+  const profitMargin = outputValue > 0 ? (profit / outputValue) * 100 : 0;
+  const profitPerUnit = recipe.amount > 0 ? profit / recipe.amount : 0;
+
+  // Determine confidence
+  const missingPrices: string[] = [];
+  if (outputPrice === null) missingPrices.push(recipe.name);
+  for (const inp of inputs) {
+    if (inp.price === null) missingPrices.push(inp.itemName);
+  }
+
+  let confidence: ConfidenceLevel;
+  const totalItems = recipe.materials.length + 1; // +1 for output
+  const missingCount = missingPrices.length;
+  if (missingCount === 0) {
+    confidence = "high";
+  } else if (missingCount < totalItems) {
+    confidence = "medium";
+  } else {
+    confidence = "low";
+  }
+
+  return {
+    recipeId: recipe.itemId,
+    recipeName: recipe.name,
+    profession: recipe.profession ?? "Unknown",
+    level: recipe.level,
+    experience: recipe.experience,
+    outputQty: recipe.amount,
+    outputPrice,
+    outputValue,
+    inputs,
+    totalInputCost,
+    craftTax,
+    totalCost,
+    profit,
+    profitMargin,
+    profitPerUnit,
     confidence,
     missingPrices,
   };

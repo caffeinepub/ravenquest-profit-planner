@@ -22,7 +22,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
 // ─── Shared helpers ────────────────────────────────────────────────────────
 
@@ -196,12 +196,14 @@ interface GatheringProfitRowProps {
   item: GatheringItem;
   rowIndex: number;
   quantityLabel?: string;
+  categoryBadge?: ReactNode;
 }
 
 export function GatheringProfitRow({
   item,
   rowIndex,
   quantityLabel = "Plots",
+  categoryBadge,
 }: GatheringProfitRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -248,6 +250,7 @@ export function GatheringProfitRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{item.name}</span>
+            {categoryBadge}
             <Badge
               variant="outline"
               className="border-border/50 px-1.5 py-0 text-[10px] text-muted-foreground"

@@ -15,9 +15,11 @@ interface ConfigState {
   landSize: LandSize;
   landMultiplier: number;
   marketFeePercent: number;
+  craftTaxPercent: number;
 
   setLandSize: (size: LandSize) => void;
   setMarketFeePercent: (percent: number) => void;
+  setCraftTaxPercent: (percent: number) => void;
 }
 
 export const useConfigStore = create<ConfigState>()(
@@ -26,6 +28,7 @@ export const useConfigStore = create<ConfigState>()(
       landSize: "medium",
       landMultiplier: LAND_MULTIPLIERS.medium,
       marketFeePercent: 5,
+      craftTaxPercent: 0,
 
       setLandSize: (size: LandSize) => {
         set({
@@ -36,6 +39,10 @@ export const useConfigStore = create<ConfigState>()(
 
       setMarketFeePercent: (percent: number) => {
         set({ marketFeePercent: Math.max(0, Math.min(100, percent)) });
+      },
+
+      setCraftTaxPercent: (percent: number) => {
+        set({ craftTaxPercent: Math.max(0, Math.min(100, percent)) });
       },
     }),
     {

@@ -36,8 +36,14 @@ const LAND_OPTIONS: Array<{
 export function GlobalSettingsBar({
   onOpenPriceBook: _onOpenPriceBook,
 }: GlobalSettingsBarProps) {
-  const { landSize, marketFeePercent, setLandSize, setMarketFeePercent } =
-    useConfigStore();
+  const {
+    landSize,
+    marketFeePercent,
+    craftTaxPercent,
+    setLandSize,
+    setMarketFeePercent,
+    setCraftTaxPercent,
+  } = useConfigStore();
 
   return (
     <div className="border-b border-border bg-surface-1/80 backdrop-blur">
@@ -112,6 +118,43 @@ export function GlobalSettingsBar({
                   <p className="text-xs">
                     Deducted from revenue when you sell on the market. Default
                     5%. Adjust to match your server's actual fee.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Craft Tax */}
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">
+              Craft Tax
+            </Label>
+            <div className="relative">
+              <Input
+                data-ocid="settings.craft_tax_input"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={craftTaxPercent}
+                onChange={(e) =>
+                  setCraftTaxPercent(Number.parseFloat(e.target.value) || 0)
+                }
+                className="h-8 w-20 bg-surface-2 pr-6 text-right text-xs font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                %
+              </span>
+            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p className="text-xs">
+                    Crafting station tax applied to total material cost. The
+                    wiki shows ~5–8% effective rates. Default 0%.
                   </p>
                 </TooltipContent>
               </Tooltip>

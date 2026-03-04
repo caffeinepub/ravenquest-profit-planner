@@ -10,7 +10,44 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export interface _SERVICE {}
+export interface GrowingClaim {
+  'itemId' : bigint,
+  'claimedAt' : bigint,
+  'claimedBy' : Principal,
+  'itemName' : string,
+  'landSize' : string,
+  'quantity' : bigint,
+  'category' : string,
+}
+export interface PriceEntry {
+  'itemId' : bigint,
+  'lastUpdatedAt' : bigint,
+  'updatedBy' : Principal,
+  'itemName' : string,
+  'price' : number,
+}
+export interface UserProfile { 'name' : string }
+export type UserRole = { 'admin' : null } |
+  { 'user' : null } |
+  { 'guest' : null };
+export interface _SERVICE {
+  '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'clearAll' : ActorMethod<[], undefined>,
+  'clearPrice' : ActorMethod<[bigint], undefined>,
+  'getAttributions' : ActorMethod<[], Array<[bigint, string]>>,
+  'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
+  'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getClaims' : ActorMethod<[], Array<GrowingClaim>>,
+  'getMyClaims' : ActorMethod<[], Array<GrowingClaim>>,
+  'getPrices' : ActorMethod<[], Array<[bigint, PriceEntry]>>,
+  'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'isCallerAdmin' : ActorMethod<[], boolean>,
+  'removeClaim' : ActorMethod<[bigint], undefined>,
+  'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setClaim' : ActorMethod<[bigint, string, string, string, bigint], undefined>,
+  'setPrice' : ActorMethod<[bigint, string, number], undefined>,
+}
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
 export declare const idlFactory: IDL.InterfaceFactory;

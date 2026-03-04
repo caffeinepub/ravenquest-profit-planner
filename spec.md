@@ -2,50 +2,51 @@
 
 ## Current State
 
-Previous version had a full profit planner but was broken (prices not appearing, deployment failed). The `.old/` directory contains all prior frontend code as reference. The app has no deployed frontend currently.
+- Five calculator tabs: All Items, Farming, Herbalism, Woodcutting, Husbandry
+- CraftingCalculator.tsx exists but shows a "Coming Soon" placeholder
+- Price Book backed by localStorage (local mode) and optional guild mode via Internet Identity login
+- Guild shared prices require login (Internet Identity) to write; anonymous users can only read
+- Backend has `setPrice`/`clearPrice`/`clearAll` gated behind `#user` permission (requires login)
+- Crafting recipes fetched from Ravendawn API (`fetchAllCrafting`) for Alchemy, Blacksmithing, Carpentry, Cooking, Weaving
+- `CraftingRecipe` type defined with `materials` (array of `{itemId, amount, name}`) and output `itemId/name/amount`
+- Profit engine has `calculateGatheringProfit` and `calculateHusbandryProfit` but no crafting profit function
+- `useAllCrafting` hook exists in `useQueries.ts`
+- AllItemsCalculator only combines Farming/Herbalism/Woodcutting/Husbandry — no Crafting
 
 ## Requested Changes (Diff)
 
 ### Add
-- Farming, Herbalism, Woodcutting, Husbandry tabs each showing all items from the live Ravendawn API (`https://api.ravendawn.online/v1/professions/{profession}`)
-- For each item (crop/herb/tree/animal pen), show:
-  - Item name
-  - Output items with drop counts (min-max) from API
-  - Quantity multiplier input (how many harvests/plots the user plans)
-  - Per-output-item: market price input field (manual, persisted to localStorage)
-  - Calculated: Total revenue = sum of (avg count * market price * quantity)
-  - Calculated: Profit (revenue minus any seed/input costs if present in API data)
-  - Profit per hour (using growingTime from API)
-- Land multiplier setting (global, applies to all yield calculations): Small(1x), Medium(2x), Large(4x), Stronghold(8x), Fort(20x)
-- Market fee % setting (global, deducted from revenue)
-- Price Book: localStorage-persisted market prices keyed by item ID (`priceBook:v1`)
-- All items from each endpoint shown (paginate or "show all" -- never truncated to <4)
-- Husbandry: show both gathering and butchering modes as tabs within each animal entry
-- "Clear all prices" and "Export/Import JSON" for price book
+
+- **Anonymous shared Price Book**: Remove login requirement from `setPrice`, `clearPrice`, `clearAll` in backend — any user (including guests) can update shared prices
+- **CraftingCalculator**: Full implementation replacing the placeholder, with:
+  - Load all recipes from API via `useAllCrafting`
+  - Per-recipe: show output item + quantity, all materials + quantities, total material cost (from price book), output value (from price book), profit, profit margin %, craft tax included
+  - Inline price editing for both output items AND materials (reuse price book store)
+  - Profession filter (Alchemy / Blacksmithing / Carpentry / Cooking / Weaving / All)
+  - Level filter, search, sort by profit/margin/level/name
+  - Show only positive profit toggle
+  - Confidence badge (High/Medium/Low)
+  - Recipe cost uses material prices × material amounts (summed); output value = output price × output amount; profit = output value − material cost − craft tax
+- **`calculateCraftingProfit`** function in `profitEngine.ts`
+- **Crafting tab** added to App.tsx navigation
+- **Crafting included in AllItemsCalculator** as a fifth category (with a distinct badge color)
 
 ### Modify
-- API data shape correction: API returns `count: [min, max]` on items, not `min`/`max` separately -- fix all type definitions and calculations to use `item.count[0]` and `item.count[1]`
-- Husbandry API returns `items.gathering` and `items.butchering` as arrays (or null); handle null gracefully
+
+- **Backend `main.mo`**: Remove `#user` permission check from `setPrice`, `clearPrice`, `clearAll` so anonymous callers can write shared prices. Keep auth on `getMyClaims`, `setClaim`, `removeClaim`, user profile functions.
+- **`PriceBookPanel.tsx`**: Remove login-required notice for guild mode editing — all visitors can edit shared prices in guild mode
+- **`App.tsx`**: Add "Crafting" tab between Husbandry and Guild Planner
+- **Header subtitle**: Update to include "Crafting"
 
 ### Remove
-- Crafting calculator tab (not part of this request -- focus is Farming/Herbalism/Woodcutting/Husbandry only)
-- API Explorer tab
-- "Live market prices" toggle (no live price API exists)
-- Any mock/hardcoded data
+
+- Login gate on price editing in guild mode (visible to all users)
 
 ## Implementation Plan
 
-1. Backend: minimal Motoko canister (no persistent data needed -- all state is frontend localStorage)
-2. API client: fetch from `https://api.ravendawn.online/v1/professions/{farming|herbalism|woodcutting|husbandry}` with stale-while-revalidate caching and error handling. Correct type definitions to use `count: [number, number]` on item drops.
-3. Price Book store: Zustand + persist to localStorage key `priceBook:v1`. Structure: `{ [itemId: number]: { itemName: string; price: number; updatedAt: string } }`. Support set, get, clear, importJSON, exportJSON.
-4. Global config store: Zustand + persist. Fields: `landMultiplier` (1/2/4/8/20), `marketFeePercent` (default 8), `quantity` (default 1 -- can be overridden per-item too).
-5. Profit engine: `revenue = sum(avgCount * landMultiplier * price * quantity)`, `netRevenue = revenue * (1 - marketFee/100)`, `profitPerHour = netRevenue / (growingTime / 3600)`. Confidence: high (all prices set), medium (some set), low (none set).
-6. Tab layout: Farming | Herbalism | Woodcutting | Husbandry. Each tab:
-   - Left: filters (search, skill level range, sort by profit/margin/profit-per-hour, "only positive profit" toggle)
-   - Center: scrollable results list. Each row expandable to show output item breakdown with inline price inputs.
-   - Right: sticky summary panel (total profit, avg margin, best item).
-7. Inline price input: clicking on an output item's price cell opens a small inline editor. Price is saved to Price Book on blur/enter. Shows placeholder "Set price" if not set.
-8. Quantity input: per-row number input (default 1). Changes only affect that row's calculation.
-9. Confidence badge: color-coded. Green = all prices set. Yellow = some. Red = none.
-10. Global settings bar at top: land multiplier dropdown, market fee % input, "Open Price Book" button.
-11. All API calls go directly from frontend to `https://api.ravendawn.online` (CORS is open on that API).
+1. Update `src/backend/main.mo` — remove `#user` permission check from `setPrice`, `clearPrice`, `clearAll`
+2. Add `calculateCraftingProfit` to `src/frontend/src/lib/calculator/profitEngine.ts`
+3. Replace `src/frontend/src/pages/CraftingCalculator.tsx` with full implementation
+4. Update `src/frontend/src/pages/AllItemsCalculator.tsx` to include crafting items
+5. Update `src/frontend/src/App.tsx` to add Crafting tab
+6. Update `src/frontend/src/components/PriceBookPanel.tsx` to remove login gate on guild mode editing
